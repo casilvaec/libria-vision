@@ -138,6 +138,7 @@ st.set_page_config(
     page_title="LibrIA – Escáner de Visión",  # Título en pestaña del navegador
     page_icon="📚",  # Emoji que aparece en la pestaña
     layout="centered"  # Alternativa: "wide" para usar todo el ancho
+    initial_sidebar_state="collapsed"  # NUEVO: Oculta sidebar por defecto
 )
 
 st.title("📚 LibrIA – Escáner de Visión (Fase 2)")
