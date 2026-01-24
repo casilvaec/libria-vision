@@ -137,12 +137,29 @@ def get_openai_client() -> OpenAI:
 st.set_page_config(
     page_title="LibrIA – Escáner de Visión",  # Título en pestaña del navegador
     page_icon="📚",  # Emoji que aparece en la pestaña
-    layout="centered"  # Alternativa: "wide" para usar todo el ancho
+    layout="centered",  # Alternativa: "wide" para usar todo el ancho
     initial_sidebar_state="collapsed"  # NUEVO: Oculta sidebar por defecto
 )
 
-st.title("📚 LibrIA – Escáner de Visión (Fase 2)")
-st.write("Sube una foto de la portada. La IA devolverá **solo Título y Autor** (JSON estricto).")
+st.title("📚 LibrIA – Escáner de Visión ")
+st.markdown(
+    "Sube una foto de la **portada del libro** y la IA extraerá "
+    "el título y autor automáticamente."
+)
+#st.write("Sube una foto de la portada. La IA devolverá **solo Título y Autor** (JSON estricto).")
+
+# NUEVO: Info box con instrucciones
+with st.expander("📖 ¿Cómo usarlo?", expanded=False):
+    st.markdown("""
+    1. 📸 Sube o toma foto de la portada
+    2. ⚡ Presiona "Detectar Título y Autor"
+    3. ✅ Recibe los datos en segundos
+    
+    **Tips para mejores resultados:**
+    - Foto frontal y centrada
+    - Buena iluminación
+    - Texto legible
+    """)
 
 # Log de inicio de sesión (útil para analytics o debugging)
 logger.info("Nueva sesión iniciada en LibrIA")
@@ -269,7 +286,7 @@ def extract_title_author(client: OpenAI, image_bytes: bytes, mime: str) -> dict:
         # temperature=0: Respuestas determinísticas (siempre iguales)
         # CRUCIAL para extracción de datos: queremos precisión, no creatividad
         # Rango: 0 (determinístico) a 2 (muy aleatorio/creativo)
-        
+        timeout=30,
         messages=[
             # Estructura de mensajes del Chat Completions API
             {"role": "system", "content": SYSTEM_PROMPT},
