@@ -5,6 +5,8 @@ import os
 import json
 import base64
 import logging
+import time
+import requests
 import streamlit as st
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -409,8 +411,24 @@ if uploaded:
                 client = get_openai_client()
                 
                 # Llama a la función de extracción
-                result = extract_title_author(client, image_bytes, mime)
-
+                # result = extract_title_author(client, image_bytes, mime)
+                # URL del webhook de n8n
+                webhook_url = "https://carlossilvatech.app.n8n.cloud/webhook-test/libria/research"
+                
+                # Prepara los datos
+                payload = {
+                        "titulo": titulo,  # O el valor que tengas
+                        "autor": autor,    # O el valor que tengas
+                        "requestId": f"req-{int(time.time())}
+                        
+                    }
+                
+                # Llama al webhook
+                    response = requests.post(webhook_url, json=payload, timeout=30)
+                    response_data = response.json()
+                
+                # AQUÍ ESTÁ LA PARTE IMPORTANTE - Extrae solo el body
+                    result = response_data.get("body", {})
                 # Extrae los campos del resultado
                 titulo = result.get("titulo")
                 autor = result.get("autor")
