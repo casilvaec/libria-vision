@@ -11,6 +11,16 @@ import streamlit as st
 from dotenv import load_dotenv
 from openai import OpenAI
 
+# ============================================================
+# IMPORTS - RATE LIMITING
+# ============================================================
+from utils.rate_limiter import (
+    get_device_fingerprint,
+    check_rate_limit,
+    increment_usage,
+    mostrar_cuota
+)
+
 
 # ============================================================
 # LOGGING CONFIGURATION
@@ -148,7 +158,29 @@ st.markdown(
     "Sube una foto de la **portada del libro** y la IA extraerá "
     "el título y autor automáticamente."
 )
+
+# ============================================================
+# RATE LIMITING - VERIFICACIÓN INICIAL
+# ============================================================
+# Obtener fingerprint del dispositivo
+device_id = get_device_fingerprint()
+
+# Verificar si puede hacer búsquedas
+puede_buscar, restantes = check_rate_limit(device_id)
+
+# Mostrar cuota restante
+mostrar_cuota(restantes)
+
+# Si llegó al límite, detener la app
+if not puede_buscar:
+    st.error(
+        "❌ Has alcanzado tu límite de 3 búsquedas gratuitas.\n\n"
+        
+    )
+    st.stop()
 #st.write("Sube una foto de la portada. La IA devolverá **solo Título y Autor** (JSON estricto).")
+
+
 
 # NUEVO: Info box con instrucciones
 with st.expander("📖 ¿Cómo usarlo?", expanded=False):
@@ -450,6 +482,11 @@ if uploaded:
                 # Muestra el JSON crudo para usuarios avanzados/debugging
                 st.subheader("JSON devuelto")
                 st.json(result)
+                # ============================================================
+                # RATE LIMITING - INCREMENTAR CONTADOR
+                # ============================================================
+                # Solo incrementar si la búsqueda fue exitosa
+                increment_usage()
                 # st.json(): Formatea y colorea el JSON automáticamente
                 
                 logger.info("Resultados mostrados exitosamente al usuario")
