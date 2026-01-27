@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 # ============================================================
-# IMPORTS - RATE LIMITING
+# IMPORTS - RATE LIMITING Y UI
 # ============================================================
 from utils.rate_limiter import (
     get_device_fingerprint,
@@ -20,51 +20,41 @@ from utils.rate_limiter import (
     increment_usage,
     mostrar_cuota
 )
+from utils.ui_components import (
+    inject_mobile_css,
+    validar_email,
+    validar_telefono,
+    mostrar_header,
+    get_codigos_pais
+)
 
 
 # ============================================================
 # LOGGING CONFIGURATION
 # ============================================================
-# Configura el sistema de logging para guardar eventos importantes
-# - level=INFO: Registra información general, advertencias y errores
-# - FileHandler: Guarda logs en archivo 'libria.log' para análisis posterior
-# - StreamHandler: Muestra logs en consola para debugging en tiempo real
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('libria.log'),  # Persiste logs en disco
-        logging.StreamHandler()  # Muestra en terminal/consola
+        logging.FileHandler('libria.log'),
+        logging.StreamHandler()
     ]
 )
 logger = logging.getLogger(__name__)
-# __name__ asegura que el logger tenga el nombre del módulo actual
 
 
 # ============================================================
 # CARGA DE VARIABLES DE ENTORNO
 # ============================================================
 load_dotenv()
-# Carga variables desde archivo .env (debe estar en .gitignore)
-# SEGURIDAD: Nunca subas el .env a repositorios públicos
 logger.info("Variables de entorno cargadas desde .env")
 
 
 # ============================================================
-# CONFIG GENERAL (APP + SEGURIDAD BÁSICA)
+# CONFIG GENERAL
 # ============================================================
-
-# Límite de tamaño de imagen
-# ¿Por qué? - Previene ataques DoS (subir archivos gigantes)
-#           - Reduce costos API (imágenes grandes = más tokens)
-#           - Mejora UX (uploads rápidos)
 MAX_IMAGE_MB = 5
 MAX_IMAGE_BYTES = MAX_IMAGE_MB * 1024 * 1024
-
-# Control de visualización de errores técnicos
-# MEJORA: Ahora se controla desde variable de entorno
-# - En desarrollo: DEBUG=true en .env
-# - En producción: DEBUG=false o sin definir
 SHOW_DEBUG_ERRORS = os.getenv("DEBUG", "False").lower() == "true"
 logger.info(f"Modo debug activado: {SHOW_DEBUG_ERRORS}")
 
@@ -72,16 +62,10 @@ logger.info(f"Modo debug activado: {SHOW_DEBUG_ERRORS}")
 # ============================================================
 # PROMPTS COMO CONSTANTES
 # ============================================================
-# BUENA PRÁCTICA: Centralizar prompts facilita:
-# - Ajustes rápidos sin tocar lógica
-# - Experimentación con diferentes versiones
-# - Reutilización en múltiples funciones
-
 SYSTEM_PROMPT = (
     "Eres un extractor de datos de portadas de libros. "
     "Devuelve únicamente JSON válido, sin texto extra, sin Markdown."
 )
-# Define el "rol" del asistente: especialista en extraer datos de portadas
 
 USER_PROMPT = """
 Extrae SOLO:
@@ -99,37 +83,16 @@ Formato exacto:
   "autor": "…"
 }
 """
-# Instrucciones específicas de la tarea
-# - "SOLO titulo y autor": Evita campos extras innecesarios
-# - "null si no estás seguro": Previene alucinaciones (datos inventados)
-# - "JSON estricto": Facilita el parsing programático
 
 
 # ============================================================
-# CLIENTE OPENAI (CACHEADO PARA STREAMLIT)
+# CLIENTE OPENAI (CACHEADO)
 # ============================================================
-
 @st.cache_resource
 def get_openai_client() -> OpenAI:
-    """
-    Crea y cachea el cliente de OpenAI.
-    
-    ¿Por qué cache?
-    - Streamlit re-ejecuta el script completo en cada interacción
-    - @st.cache_resource mantiene el cliente en memoria entre ejecuciones
-    - Evita crear múltiples conexiones innecesarias
-    - Mejora rendimiento y consistencia
-    
-    Returns:
-        OpenAI: Cliente configurado y listo para usar
-        
-    Raises:
-        ValueError: Si OPENAI_API_KEY no está en variables de entorno
-    """
+    """Crea y cachea el cliente de OpenAI."""
     api_key = os.getenv("OPENAI_API_KEY")
     
-    # MEJORA: Validación temprana de API key
-    # Falla rápido con mensaje claro en lugar de error críptico después
     if not api_key:
         logger.error("OPENAI_API_KEY no encontrada en variables de entorno")
         raise ValueError(
@@ -142,60 +105,36 @@ def get_openai_client() -> OpenAI:
 
 
 # ============================================================
-# UI BÁSICA (CONFIGURACIÓN DE PÁGINA)
+# CONFIGURACIÓN DE PÁGINA
 # ============================================================
-
-# IMPORTANTE: set_page_config() DEBE ser el primer comando Streamlit
 st.set_page_config(
-    page_title="LibrIA – Escáner de Visión",  # Título en pestaña del navegador
-    page_icon="📚",  # Emoji que aparece en la pestaña
-    layout="centered",  # Alternativa: "wide" para usar todo el ancho
-    initial_sidebar_state="collapsed"  # NUEVO: Oculta sidebar por defecto
+    page_title="LibrIA – ¿De qué trata el libro?",
+    page_icon="📚",
+    layout="centered",
+    initial_sidebar_state="collapsed"
 )
 
-st.title("📚 LibrIA – Escáner de Visión ")
-st.markdown(
-    "Sube una foto de la **portada del libro** y la IA extraerá "
-    "el título y autor automáticamente."
-)
+# Inyectar CSS Mobile-First
+inject_mobile_css()
+
+# Mostrar header mejorado
+mostrar_header()
+
 
 # ============================================================
 # RATE LIMITING - VERIFICACIÓN INICIAL
 # ============================================================
-# Obtener fingerprint del dispositivo
 device_id = get_device_fingerprint()
-
-# Verificar si puede hacer búsquedas
 puede_buscar, restantes = check_rate_limit(device_id)
-
-# Mostrar cuota restante
 mostrar_cuota(restantes)
 
-# Si llegó al límite, detener la app
 if not puede_buscar:
     st.error(
         "❌ Has alcanzado tu límite de 3 búsquedas gratuitas.\n\n"
-        
+        "💡 Si eres evaluador del proyecto, usa el link especial con tu token de acceso."
     )
     st.stop()
-#st.write("Sube una foto de la portada. La IA devolverá **solo Título y Autor** (JSON estricto).")
 
-
-
-# NUEVO: Info box con instrucciones
-with st.expander("📖 ¿Cómo usarlo?", expanded=False):
-    st.markdown("""
-    1. 📸 Sube o toma foto de la portada
-    2. ⚡ Presiona "Detectar Título y Autor"
-    3. ✅ Recibe los datos en segundos
-    
-    **Tips para mejores resultados:**
-    - Foto frontal y centrada
-    - Buena iluminación
-    - Texto legible
-    """)
-
-# Log de inicio de sesión (útil para analytics o debugging)
 logger.info("Nueva sesión iniciada en LibrIA")
 
 
@@ -204,352 +143,440 @@ logger.info("Nueva sesión iniciada en LibrIA")
 # ============================================================
 
 def image_bytes_to_data_url(image_bytes: bytes, mime: str) -> str:
-    """
-    Convierte bytes de imagen en Data URL para OpenAI Vision API.
-    
-    ¿Por qué Data URL?
-    - OpenAI Vision API requiere imágenes en formato base64 dentro de Data URLs
-    - Permite enviar la imagen directamente sin subirla a un servidor externo
-    - Más eficiente para imágenes de tamaño razonable
-    
-    Args:
-        image_bytes (bytes): Bytes crudos de la imagen cargada
-        mime (str): Tipo MIME (ej: "image/jpeg", "image/png", "image/webp")
-    
-    Returns:
-        str: Data URL en formato estándar "data:{mime};base64,{datos_codificados}"
-    
-    Example:
-        >>> data_url = image_bytes_to_data_url(img_bytes, "image/jpeg")
-        >>> # Retorna: "data:image/jpeg;base64,/9j/4AAQSkZJRg..."
-    """
-    # Codifica bytes a base64 y convierte a string UTF-8
+    """Convierte bytes de imagen en Data URL para OpenAI Vision API."""
     b64 = base64.b64encode(image_bytes).decode("utf-8")
-    
-    # Retorna en formato Data URL estándar (RFC 2397)
     return f"data:{mime};base64,{b64}"
 
 
 def safe_json_parse(content: str) -> dict:
-    """
-    Parse robusto de JSON con recuperación de errores.
-    
-    Estrategia de dos niveles:
-    1. Intenta parsear directamente (caso ideal)
-    2. Si falla, busca el primer objeto JSON válido dentro del texto
-    
-    ¿Por qué necesitamos esto?
-    - A veces GPT responde con ```json {...} ``` a pesar de las instrucciones
-    - Puede incluir texto antes/después del JSON
-    - Queremos recuperarnos de estos casos sin fallar completamente
-    
-    Args:
-        content (str): String que debería contener JSON
-    
-    Returns:
-        dict: Objeto Python parseado desde el JSON
-        
-    Raises:
-        json.JSONDecodeError: Si no se puede parsear ni recuperar JSON válido
-    """
-    content = content.strip()  # Elimina espacios en blanco al inicio/final
+    """Parse robusto de JSON con recuperación de errores."""
+    content = content.strip()
 
     try:
-        # INTENTO 1: Parse directo (caso ideal, más rápido)
         return json.loads(content)
         
     except json.JSONDecodeError as e:
-        # INTENTO 2: Recuperación - extraer JSON del texto
         logger.warning(f"JSON parse falló, intentando recuperación. Error: {e}")
         
-        # Busca el primer '{' y último '}' para extraer el objeto JSON
         start = content.find("{")
         end = content.rfind("}")
         
-        # Valida que encontramos ambos delimitadores en orden correcto
         if start != -1 and end != -1 and end > start:
             try:
-                # Extrae el substring y parsealo
                 recovered_json = json.loads(content[start:end + 1])
                 logger.info("JSON recuperado exitosamente mediante extracción")
                 return recovered_json
             except json.JSONDecodeError:
-                # La recuperación también falló
                 logger.error(f"Recuperación de JSON falló. Contenido: {content[:200]}...")
                 raise
         
-        # Si no pudimos recuperar, re-lanzamos el error original
         logger.error(f"No se pudo recuperar JSON. Contenido: {content[:200]}...")
         raise
 
 
 def extract_title_author(client: OpenAI, image_bytes: bytes, mime: str) -> dict:
-    """
-    Extrae título y autor de una portada usando GPT-4o-mini Vision.
-    
-    Proceso:
-    1. Convierte imagen a Data URL
-    2. Envía a OpenAI con prompts específicos
-    3. Parsea respuesta JSON de forma robusta
-    
-    Args:
-        client (OpenAI): Cliente OpenAI configurado (inyección de dependencias)
-        image_bytes (bytes): Bytes de la imagen de la portada
-        mime (str): Tipo MIME de la imagen
-    
-    Returns:
-        dict: Diccionario con estructura {"titulo": "...", "autor": "..."}
-              Valores pueden ser None/null si no se detectaron
-        
-    Raises:
-        Exception: Errores de API o parsing (manejados en el caller)
-    """
+    """Extrae título y autor de una portada usando GPT-4o-mini Vision."""
     logger.info(f"Iniciando extracción de título/autor. Tamaño imagen: {len(image_bytes)} bytes")
     
-    # Convierte la imagen al formato requerido por OpenAI Vision
     data_url = image_bytes_to_data_url(image_bytes, mime)
 
-    # Llamada a la API de OpenAI
-    # BUENA PRÁCTICA: Usar las constantes definidas al inicio
     resp = client.chat.completions.create(
-        model="gpt-4o-mini",  
-        # gpt-4o-mini: Modelo con visión, balance costo/rendimiento
-        # Alternativas: gpt-4o (más preciso, más caro), gpt-4-vision-preview
-        
-        temperature=0,  
-        # temperature=0: Respuestas determinísticas (siempre iguales)
-        # CRUCIAL para extracción de datos: queremos precisión, no creatividad
-        # Rango: 0 (determinístico) a 2 (muy aleatorio/creativo)
+        model="gpt-4o-mini",
+        temperature=0,
         timeout=30,
         messages=[
-            # Estructura de mensajes del Chat Completions API
             {"role": "system", "content": SYSTEM_PROMPT},
-            # "system": Define el comportamiento/personalidad del asistente
-            
             {
                 "role": "user",
                 "content": [
-                    # Contenido multimodal: texto + imagen
                     {"type": "text", "text": USER_PROMPT},
                     {"type": "image_url", "image_url": {"url": data_url}},
-                    # OpenAI Vision permite combinar múltiples tipos de contenido
                 ],
             },
         ],
     )
 
-    # Extrae el contenido de la respuesta
     content = resp.choices[0].message.content or ""
-    # "or ''": Manejo defensivo, previene error si content es None
-    
     logger.info(f"Respuesta recibida de OpenAI. Longitud: {len(content)} caracteres")
 
-    # Parsea el JSON de forma robusta usando nuestro helper
     result = safe_json_parse(content)
-    
     logger.info(f"Extracción exitosa - Título: {result.get('titulo')}, Autor: {result.get('autor')}")
     return result
 
 
-# ============================================================
-# UI PRINCIPAL (INTERFAZ DE USUARIO)
-# ============================================================
-
-# Widget para subir archivos
-uploaded = st.file_uploader(
-    "📷 Sube la portada (JPG/PNG/WebP)", 
-    type=["jpg", "jpeg", "png", "webp"]
-    # SEGURIDAD: Lista blanca de extensiones
-    # Solo acepta formatos de imagen comunes y seguros
-    # Previene subida de ejecutables, scripts, etc.
-)
-
-# Condicional: Solo procesar si hay un archivo subido
-if uploaded:
-    # Lee los bytes del archivo
-    image_bytes = uploaded.read()
-    # NOTA: .read() carga todo en memoria
-    # Para archivos muy grandes (>100MB) considerar streaming
+def llamar_n8n_webhook(titulo: str, autor: str, email: str = None, telefono: str = None) -> dict:
+    """
+    Llama al webhook de n8n para buscar reseñas.
     
-    mime = uploaded.type or "image/jpeg"
-    # uploaded.type puede ser None en algunos casos
-    # BUENA PRÁCTICA: Siempre tener un valor por defecto
-    
-    logger.info(f"Archivo subido: {uploaded.name}, Tamaño: {len(image_bytes)} bytes, MIME: {mime}")
-
-    # --------------------------------------------------------
-    # VALIDACIÓN DE TAMAÑO (SEGURIDAD + UX + COSTOS)
-    # --------------------------------------------------------
-    if len(image_bytes) > MAX_IMAGE_BYTES:
-        # Calcula tamaño en MB para mostrar al usuario
-        size_mb = len(image_bytes) / 1024 / 1024
+    Args:
+        titulo: Título del libro
+        autor: Autor del libro
+        email: Email del usuario (opcional)
+        telefono: Teléfono de Telegram (opcional)
         
-        logger.warning(f"Imagen rechazada por tamaño: {size_mb:.2f} MB (límite: {MAX_IMAGE_MB} MB)")
+    Returns:
+        dict: Respuesta JSON del webhook con la ficha completa
+    """
+    webhook_url = os.getenv("N8N_WEBHOOK_URL")
+    
+    if not webhook_url:
+        logger.error("N8N_WEBHOOK_URL no configurada")
+        raise ValueError("N8N_WEBHOOK_URL no configurada en .env")
+    
+    payload = {
+        "titulo": titulo,
+        "autor": autor,
+        "requestId": f"req-{int(time.time())}",
+        "device_id": device_id,
+        "email": email,
+        "telefono": telefono,
+        "generar_audio": bool(telefono)
+    }
+    
+    logger.info(f"Llamando webhook n8n para: {titulo} - {autor}")
+    
+    try:
+        response = requests.post(webhook_url, json=payload, timeout=60)
+        response.raise_for_status()
+        data = response.json()
+        
+        logger.info("Respuesta exitosa de n8n webhook")
+        return data
+        
+    except requests.exceptions.Timeout:
+        logger.error("Timeout al llamar n8n webhook")
+        raise Exception("El servidor tardó demasiado en responder. Intenta nuevamente.")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error al llamar n8n webhook: {str(e)}")
+        raise Exception(f"Error al conectar con el servidor: {str(e)}")
+
+
+# ============================================================
+# UI PRINCIPAL - PASO 1: CAPTURA DE IMAGEN
+# ============================================================
+st.write("### 📸 Paso 1: Sube la portada del libro")
+
+col1, col2 = st.columns(2)
+with col1:
+    foto = st.camera_input("📷 Tomar foto")
+with col2:
+    archivo = st.file_uploader("📁 O subir imagen", type=["jpg", "jpeg", "png", "webp"])
+
+imagen = foto or archivo
+
+if not imagen:
+    st.info("👆 Toma una foto o sube una imagen para comenzar")
+    st.stop()
+
+# Validar tamaño de imagen
+image_bytes = imagen.read()
+mime = imagen.type or "image/jpeg"
+
+if len(image_bytes) > MAX_IMAGE_BYTES:
+    size_mb = len(image_bytes) / 1024 / 1024
+    logger.warning(f"Imagen rechazada por tamaño: {size_mb:.2f} MB")
+    st.error(f"❌ La imagen es muy pesada ({size_mb:.2f} MB). Máximo {MAX_IMAGE_MB} MB.")
+    st.info(
+        "💡 **Tip:** Reduce el tamaño en [TinyPNG](https://tinypng.com) "
+        "o toma la foto en resolución media."
+    )
+    st.stop()
+
+# Mostrar preview
+st.image(image_bytes, caption="Portada cargada", use_container_width=True)
+
+
+# ============================================================
+# UI PRINCIPAL - PASO 2: OPCIONES DE ENTREGA
+# ============================================================
+st.write("### 📬 Paso 2: ¿Cómo quieres recibir tu reseña?")
+
+with st.form("opciones_entrega"):
+    st.write("Selecciona al menos una opción adicional:")
+    
+    # Visualizar en pantalla - SIEMPRE ACTIVO Y NO SE PUEDE DESMARCAR
+    st.checkbox("👀 Visualizar en pantalla", value=True, disabled=True, 
+                help="Siempre se mostrará en pantalla")
+    mostrar_web = True  # Forzar a True
+    
+    # Email opcional
+    enviar_email = st.checkbox("📧 Recibir PDF por correo")
+    email = ""
+    if enviar_email:
+        email = st.text_input(
+            "Tu email",
+            placeholder="tu@email.com",
+            help="Enviaremos un PDF con la reseña completa"
+        )
+    
+    # Telegram opcional con selector de país
+    enviar_telegram = st.checkbox("🎧 Audio resumen por Telegram (1 min)")
+    telefono_completo = ""
+    pais_seleccionado = None
+    codigo_manual = ""
+    numero = ""
+    
+    if enviar_telegram:
+        # Obtener códigos de país
+        codigos_pais = get_codigos_pais()
+        
+        col_pais, col_numero = st.columns([1, 2])
+        with col_pais:
+            pais_seleccionado = st.selectbox(
+                "País",
+                list(codigos_pais.keys()),
+                index=0,  # Ecuador por defecto
+                help="Selecciona tu código de país"
+            )
+        
+        with col_numero:
+            # Si seleccionó "Otro país", mostrar input para código manual
+            if pais_seleccionado == "🌍 Otro país (ingresar código)":
+                codigo_manual = st.text_input(
+                    "Código país",
+                    placeholder="+1, +44, +86...",
+                    help="Ejemplo: +1 (USA), +44 (UK), +86 (China)"
+                )
+                numero = st.text_input(
+                    "Número",
+                    placeholder="999-888-777",
+                    help="Solo el número sin código de país"
+                )
+                
+                # Combinar código manual + número
+                if codigo_manual and numero:
+                    numero_limpio = numero.replace("-", "").replace(" ", "")
+                    telefono_completo = f"{codigo_manual}{numero_limpio}"
+            else:
+                # País de la lista: usar código predefinido
+                numero = st.text_input(
+                    "Número",
+                    placeholder="999-888-777",
+                    help="Solo el número sin código de país"
+                )
+                
+                # Combinar código de país + número
+                if numero:
+                    codigo = codigos_pais[pais_seleccionado]
+                    numero_limpio = numero.replace("-", "").replace(" ", "")
+                    telefono_completo = f"{codigo}{numero_limpio}"
+    
+    submitted = st.form_submit_button(
+        "🚀 OBTENER MI RESEÑA",
+        type="primary",
+        use_container_width=True
+    )
+
+
+# ============================================================
+# PROCESAMIENTO Y VALIDACIONES
+# ============================================================
+if submitted:
+    # ========================================
+    # VALIDACIÓN 1: Al menos Email O Telegram
+    # ========================================
+    if not enviar_email and not enviar_telegram:
+        st.error(
+            "⚠️ **Debes seleccionar al menos una opción adicional:**\n\n"
+            "• 📧 Recibir PDF por correo\n\n"
+            "• 🎧 Audio resumen por Telegram"
+        )
+        st.stop()
+    
+    # ========================================
+    # VALIDACIÓN 2: Email (si fue seleccionado)
+    # ========================================
+    if enviar_email:
+        if not email:
+            st.error("⚠️ Ingresa tu email")
+            st.stop()
+        if not validar_email(email):
+            st.error("⚠️ Email inválido. Formato correcto: usuario@dominio.com")
+            st.stop()
+    
+    # ========================================
+    # VALIDACIÓN 3: Teléfono (si fue seleccionado)
+    # ========================================
+    if enviar_telegram:
+        if not numero:
+            st.error("⚠️ Ingresa tu número de Telegram")
+            st.stop()
+        
+        # Validación especial si es "Otro país"
+        if pais_seleccionado == "🌍 Otro país (ingresar código)":
+            if not codigo_manual:
+                st.error("⚠️ Ingresa el código de país (ej: +44 para UK)")
+                st.stop()
+            if not codigo_manual.startswith("+"):
+                st.error("⚠️ El código de país debe empezar con + (ej: +44)")
+                st.stop()
+        
+        if not validar_telefono(telefono_completo):
+            st.error(
+                "⚠️ Número inválido. Verifica que:\n\n"
+                "• El código de país sea correcto (ej: +593)\n"
+                "• El número solo contenga dígitos\n"
+                "• Formato: +593-999-888-777"
+            )
+            st.stop()
+    
+    # ========================================
+    # PASO 1: OCR - EXTRAER TÍTULO Y AUTOR
+    # ========================================
+    with st.spinner("📸 Analizando portada con IA..."):
+        try:
+            client = get_openai_client()
+            result_ocr = extract_title_author(client, image_bytes, mime)
+            titulo = result_ocr.get("titulo")
+            autor = result_ocr.get("autor")
+            
+            if not titulo:
+                st.error("❌ No se pudo detectar el título del libro. Intenta con otra foto.")
+                st.stop()
+            
+            st.success(f"✅ Libro detectado: **{titulo}** - {autor or 'Autor no detectado'}")
+            
+        except Exception as e:
+            logger.error(f"Error en OCR: {str(e)}", exc_info=True)
+            st.error("❌ No se pudo analizar la portada. Verifica que la imagen sea clara.")
+            if SHOW_DEBUG_ERRORS:
+                st.exception(e)
+            st.stop()
+    
+    # ========================================
+    # PASO 2: LLAMAR N8N PARA BUSCAR RESEÑAS
+    # ========================================
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    try:
+        # Progress: 20%
+        status_text.write("🔍 Buscando reseñas en internet...")
+        progress_bar.progress(20)
+        time.sleep(1)
+        
+        # Llamar webhook de n8n
+        resultado_n8n = llamar_n8n_webhook(
+            titulo=titulo,
+            autor=autor,
+            email=email if enviar_email else None,
+            telefono=telefono_completo if enviar_telegram else None
+        )
+        
+        # Progress: 60%
+        status_text.write("📊 Generando ficha técnica...")
+        progress_bar.progress(60)
+        time.sleep(2)
+        
+        # Progress: 90%
+        status_text.write("✨ Finalizando...")
+        progress_bar.progress(90)
+        time.sleep(1)
+        
+        # Progress: 100%
+        progress_bar.progress(100)
+        status_text.write("✅ ¡Listo!")
+        time.sleep(0.5)
+        
+        # Limpiar progress bar
+        progress_bar.empty()
+        status_text.empty()
+        
+        # ========================================
+        # PASO 3: MOSTRAR RESULTADOS
+        # ========================================
+        
+        # Extraer datos de la respuesta
+        ficha_data = resultado_n8n.get("body", resultado_n8n)
+        
+        # SIEMPRE mostrar en web (está forzado a True)
+        st.success("🎉 ¡Tu reseña está lista!")
+        
+        # Mostrar en tabs
+        tab1, tab2, tab3 = st.tabs(["📚 Resumen", "📊 Detalles", "🔧 JSON"])
+        
+        with tab1:
+            # Información básica
+            if "informacion_basica" in ficha_data:
+                info = ficha_data["informacion_basica"]
+                st.write(f"### {info.get('titulo', titulo)}")
+                st.write(f"**Autor:** {info.get('autor', autor)}")
+            
+            # Clasificación
+            if "clasificacion" in ficha_data:
+                clasif = ficha_data["clasificacion"]
+                st.write(f"**Género:** {clasif.get('genero_principal', 'N/A')}")
+            
+            st.divider()
+            
+            # Sinopsis
+            if "contenido" in ficha_data:
+                contenido = ficha_data["contenido"]
+                st.write("#### 📖 Sinopsis")
+                st.write(contenido.get("sinopsis", "No disponible"))
+        
+        with tab2:
+            # Temas clave
+            if "clasificacion" in ficha_data:
+                clasif = ficha_data["clasificacion"]
+                if "temas_clave" in clasif:
+                    st.write("#### 🎯 Temas Clave")
+                    for tema in clasif["temas_clave"]:
+                        st.write(f"• {tema}")
+            
+            # Métricas
+            if "estadisticas" in resultado_n8n:
+                st.write("#### 📊 Métricas de Calidad")
+                stats_str = resultado_n8n["estadisticas"]
+                stats = json.loads(stats_str) if isinstance(stats_str, str) else stats_str
+                
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Confiabilidad", f"{stats.get('confiabilidad', 0)*100:.0f}%")
+                col2.metric("Completitud", f"{stats.get('completitud', 0)*100:.0f}%")
+                col3.metric("Fuentes", stats.get('numeroFuentes', 0))
+        
+        with tab3:
+            st.json(ficha_data)
+        
+        # Mensajes de confirmación para email y telegram
+        if enviar_email:
+            st.success(f"📧 PDF enviado a **{email}**")
+            st.info("Revisa tu bandeja de entrada (y spam por si acaso)")
+        
+        if enviar_telegram:
+            st.success(f"🎧 Audio enviado a Telegram: **{telefono_completo}**")
+            st.info("Abre tu app de Telegram para escuchar el resumen")
+        
+        # ========================================
+        # INCREMENTAR CONTADOR DE USO
+        # ========================================
+        increment_usage()
+        
+        logger.info(f"Búsqueda exitosa para: {titulo} - {autor}")
+        
+    except Exception as e:
+        logger.error(f"Error al procesar libro: {str(e)}", exc_info=True)
+        
+        progress_bar.empty()
+        status_text.empty()
         
         st.error(
-            f"❌ La imagen es muy pesada ({size_mb:.2f} MB). "
-            f"Por favor sube una imagen de máximo {MAX_IMAGE_MB} MB."
+            "❌ Ocurrió un error al buscar las reseñas. "
+            "Por favor intenta nuevamente en unos momentos."
         )
         
-        # Ayuda adicional al usuario
-        st.info(
-            "💡 **Tip:** Puedes reducir el tamaño de tu imagen en:\n"
-            "- 🌐 [TinyPNG](https://tinypng.com) - Compresión sin pérdida visible\n"
-            "- 🌐 [Squoosh](https://squoosh.app) - Control avanzado de compresión\n"
-            "- 📱 Toma la foto en resolución media en lugar de alta"
-        )
-        
-        st.stop()
-        # st.stop(): Detiene la ejecución del script aquí
-        # Previene procesamiento innecesario y ahorra recursos
-
-    # Muestra preview de la imagen al usuario
-    st.image(image_bytes, caption="Imagen cargada", use_container_width=True)
-    # use_container_width=True: Ajusta imagen al ancho del contenedor (responsive)
-
-    # Botón principal de acción
-    if st.button("🔎 Detectar Título y Autor", type="primary"):
-        # type="primary": Estilo visual destacado (color azul por defecto)
-        # Indica la acción principal de la página
-        
-        logger.info("Usuario presionó botón 'Detectar Título y Autor'")
-        
-        # --------------------------------------------------------
-        # VALIDACIÓN DE API KEY
-        # --------------------------------------------------------
-        if not os.getenv("OPENAI_API_KEY"):
-            logger.error("Intento de uso sin OPENAI_API_KEY configurada")
-            
-            st.error("❌ Falta OPENAI_API_KEY en variables de entorno (.env).")
-            
-            # Instrucciones para el usuario
-            st.info(
-                "**¿Cómo configurar la API Key?**\n\n"
-                "1. Crea un archivo `.env` en la raíz del proyecto\n"
-                "2. Agrega la línea: `OPENAI_API_KEY=tu-clave-aqui`\n"
-                "3. Obtén tu clave en: https://platform.openai.com/api-keys\n"
-                "4. Reinicia la aplicación"
-            )
-            
-            st.stop()
-
-        # Spinner: Indicador visual durante procesamiento
-        with st.spinner("Analizando portada..."):
-            # Context manager: automáticamente muestra/oculta el spinner
-            # UX: Crítico mostrar feedback en operaciones que toman >1 segundo
-            
-            try:
-                # Obtiene el cliente OpenAI (cacheado)
-                client = get_openai_client()
-                
-                # Llama a la función de extracción
-                # result = extract_title_author(client, image_bytes, mime)
-                # URL del webhook de n8n
-                webhook_url = "https://carlossilvatech.app.n8n.cloud/webhook-test/libria/research"
-                
-                # Prepara los datos
-                payload = {
-                        "titulo": titulo,  # O el valor que tengas
-                        "autor": autor,    # O el valor que tengas
-                        "requestId": f"req-{int(time.time())}
-                        
-                    }
-                
-                # Llama al webhook
-                    response = requests.post(webhook_url, json=payload, timeout=30)
-                    response_data = response.json()
-                
-                # AQUÍ ESTÁ LA PARTE IMPORTANTE - Extrae solo el body
-                    result = response_data.get("body", {})
-                # Extrae los campos del resultado
-                titulo = result.get("titulo")
-                autor = result.get("autor")
-                # .get(): Retorna None si la key no existe (seguro)
-                # Alternativa: result["titulo"] lanzaría KeyError si no existe
-
-                # ========================================
-                # PRESENTACIÓN DE RESULTADOS
-                # ========================================
-                
-                st.success("✅ Listo")
-                # Mensaje de éxito para feedback positivo
-                
-                st.subheader("Resultado")
-                st.write(f"**Título:** {titulo or 'No detectado'}")
-                st.write(f"**Autor:** {autor or 'No detectado'}")
-                # "or 'No detectado'": Maneja el caso None de forma user-friendly
-
-                # Muestra el JSON crudo para usuarios avanzados/debugging
-                st.subheader("JSON devuelto")
-                st.json(result)
-                # ============================================================
-                # RATE LIMITING - INCREMENTAR CONTADOR
-                # ============================================================
-                # Solo incrementar si la búsqueda fue exitosa
-                increment_usage()
-                # st.json(): Formatea y colorea el JSON automáticamente
-                
-                logger.info("Resultados mostrados exitosamente al usuario")
-
-            except ValueError as e:
-                # Captura errores de validación (ej: API key no configurada)
-                logger.error(f"Error de validación: {str(e)}", exc_info=True)
-                st.error(f"❌ Error de configuración: {str(e)}")
-                
-            except Exception as e:
-                # Captura cualquier otro error (API, red, parsing, etc.)
-                logger.error(f"Error al extraer título/autor: {str(e)}", exc_info=True)
-                # exc_info=True: Guarda el stacktrace completo en el log
-                
-                # ========================================
-                # MANEJO DE ERRORES USER-FRIENDLY
-                # ========================================
-                
-                st.error(
-                    "❌ No se pudo extraer el título y autor. "
-                    "Consejos: usa una foto frontal, con buena luz y sin reflejos."
-                )
-                # Mensaje amigable con consejos accionables
-                
-                # Tips adicionales para ayudar al usuario
-                st.warning(
-                    "**💡 Recomendaciones para mejores resultados:**\n\n"
-                    "✓ Foto frontal de la portada (no en ángulo)\n"
-                    "✓ Buena iluminación sin reflejos\n"
-                    "✓ Texto claramente legible\n"
-                    "✓ Portada completa en el encuadre\n"
-                    "✓ Evita sombras o brillos en el texto"
-                )
-
-                # ========================================
-                # DEBUG CONTROLADO (MEJORA PROFESIONAL)
-                # ========================================
-                
-                if SHOW_DEBUG_ERRORS:
-                    # Modo desarrollo: Muestra stacktrace completo
-                    st.exception(e)
-                    st.code(f"Error type: {type(e).__name__}")
-                    # Útil para debugging durante desarrollo
-                else:
-                    # Modo producción: Oculta detalles técnicos
-                    # SEGURIDAD: No expone información interna del sistema
-                    # UX: Evita confundir al usuario con errores técnicos
-                    
-                    # Los errores ya están loggeados para análisis posterior
-                    pass
+        if SHOW_DEBUG_ERRORS:
+            st.exception(e)
 
 
 # ============================================================
-# FOOTER INFORMATIVO (OPCIONAL)
+# FOOTER
 # ============================================================
-
-st.divider()  # Línea separadora visual
-
+st.divider()
 st.caption(
-    "🤖 Powered by OpenAI GPT-4o-mini Vision | "
-    "📝 LibrIA v2.0 | "
-    f"🐛 Debug mode: {'ON' if SHOW_DEBUG_ERRORS else 'OFF'}"
+    "🤖 Powered by OpenAI GPT-4o-mini Vision + n8n | "
+    "📝 LibrIA v3.0 | "
+    f"🐛 Debug: {'ON' if SHOW_DEBUG_ERRORS else 'OFF'}"
 )
-# Información de versión y estado para contexto
 
 logger.info("Renderizado completo de la página")
