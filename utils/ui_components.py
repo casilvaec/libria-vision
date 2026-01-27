@@ -41,6 +41,7 @@ def inject_mobile_css():
     """
     css = Template("""
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700;800&family=Inter:wght@400;500;600&display=swap');
         :root {
             --color-cyan: $COLOR_CYAN;
             --color-azul-oscuro: $COLOR_AZUL_OSCURO;
@@ -53,8 +54,18 @@ def inject_mobile_css():
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             color: var(--color-negro);
         }
+                   
+        /* ========================================
+        FONDO APP (Streamlit)
+        ======================================== */
+        .stApp,
+        [data-testid="stAppViewContainer"],
+        [data-testid="stAppViewContainer"] > .main {
+            background: #F4F8FF; /* azul muy claro, tech */
+        }
 
         h1, h2, h3, h4, h5, h6 {
+            font-family: 'Space Grotesk', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             font-weight: 600;
             color: var(--color-azul-oscuro);
         }
@@ -88,6 +99,7 @@ def inject_mobile_css():
             }
 
             .libria-header-wrap .libria-brand{
+            font-family: 'Space Grotesk', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             font-size: 28px;
             font-weight: 900;
             color: var(--color-azul-oscuro);
@@ -95,6 +107,7 @@ def inject_mobile_css():
             }
 
             .libria-header-wrap .libria-title{
+            font-family: 'Space Grotesk', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             font-size: 22px;
             font-weight: 800;
             color: var(--color-azul-oscuro);
@@ -102,7 +115,7 @@ def inject_mobile_css():
             }
 
             .libria-header-wrap .libria-subtitle{
-            font-size: 14px;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             margin: 6px 0 0 0;
             font-style: italic;
             color: var(--color-gris);

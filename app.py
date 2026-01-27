@@ -114,7 +114,7 @@ def get_openai_client() -> OpenAI:
 # ============================================================
 st.set_page_config(
     page_title="LibrIA – ¿De qué trata el libro?",
-    page_icon="📚",
+    page_icon="assets/logo-libria-transparente.png",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
