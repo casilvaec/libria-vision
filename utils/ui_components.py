@@ -2,30 +2,132 @@
 # UI MOBILE-FIRST - LIBRIA
 # ============================================================
 # Estilos CSS optimizados para dispositivos móviles
-# y componentes de interfaz de usuario
+# y componentes de interfaz de usuario con branding oficial
 
+from pathlib import Path
+import base64
 import streamlit as st
+import re
+from string import Template
+
 
 
 # ============================================================
-# CSS MOBILE-FIRST
+# COLORES DE BRANDING LIBRIA
+# ============================================================
+# Extraídos del logo oficial
+COLOR_CYAN = "#00D9FF"          # Azul cyan brillante (circuitos)
+COLOR_AZUL_OSCURO = "#003D5C"   # Azul oscuro (borde)
+COLOR_VERDE = "#10B981"         # Verde (libro)
+COLOR_NEGRO = "#000000"         # Texto principal
+COLOR_GRIS = "#666666"          # Texto secundario
+
+
+# ============================================================
+# LOGO PATH (archivo real del proyecto)
+# ============================================================
+BASE_DIR = Path(__file__).resolve().parents[1]  # raíz del proyecto
+LOGO_PATH = BASE_DIR / "assets" / "logo-libria-transparente.png"
+
+
+# ============================================================
+# CSS MOBILE-FIRST CON BRANDING
 # ============================================================
 
 def inject_mobile_css():
     """
-    Inyecta CSS personalizado optimizado para móviles.
-    
-    Características:
-    - Botones grandes y táctiles (60px altura mínima)
-    - Inputs de formulario más grandes
-    - Espaciado cómodo para dedos
-    - Tipografía legible en pantallas pequeñas
-    - Diseño responsive que se adapta al tamaño
+    Inyecta CSS personalizado optimizado para móviles con branding LibrIA.
+    Usa Template ($VAR) para evitar errores con llaves {} del CSS.
     """
-    st.markdown("""
+    css = Template("""
     <style>
+        :root {
+            --color-cyan: $COLOR_CYAN;
+            --color-azul-oscuro: $COLOR_AZUL_OSCURO;
+            --color-verde: $COLOR_VERDE;
+            --color-negro: $COLOR_NEGRO;
+            --color-gris: $COLOR_GRIS;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            color: var(--color-negro);
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            font-weight: 600;
+            color: var(--color-azul-oscuro);
+        }
+
         /* ========================================
-           BOTONES - Mobile Friendly
+        HEADER scoped (PRO, sin !important)
+        ======================================== */
+            .libria-header-wrap{
+            margin: 0 0 10px 0;
+            }
+
+            .libria-header-wrap .libria-header{
+            display:flex;
+            align-items:center;
+            justify-content:flex-start;
+            gap:16px;
+            padding: 10px 0;
+            text-align:left;
+            }
+
+            .libria-header-wrap .libria-logo{
+            width: 92px;
+            height: 92px;
+            object-fit: contain;
+            flex: 0 0 auto;
+            margin: 0;
+            }
+
+            .libria-header-wrap .libria-header-text{
+            line-height: 1.15;
+            }
+
+            .libria-header-wrap .libria-brand{
+            font-size: 28px;
+            font-weight: 900;
+            color: var(--color-azul-oscuro);
+            margin: 0;
+            }
+
+            .libria-header-wrap .libria-title{
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--color-azul-oscuro);
+            margin: 2px 0 0 0;
+            }
+
+            .libria-header-wrap .libria-subtitle{
+            font-size: 14px;
+            margin: 6px 0 0 0;
+            font-style: italic;
+            color: var(--color-gris);
+            max-width: 70ch;
+            }
+
+            /* TABLET */
+            @media (min-width: 768px){
+            .libria-header-wrap .libria-logo{ width: 110px; height: 110px; }
+            .libria-header-wrap .libria-brand{ font-size: 32px; }
+            .libria-header-wrap .libria-title{ font-size: 24px; }
+            .libria-header-wrap .libria-subtitle{ font-size: 15px; max-width: 80ch; }
+            }
+
+            /* DESKTOP */
+            @media (min-width: 1024px){
+            .libria-header-wrap .libria-logo{ width: 120px; height: 120px; }
+            .libria-header-wrap .libria-brand{ font-size: 34px; }
+            .libria-header-wrap .libria-title{ font-size: 26px; }
+            .libria-header-wrap .libria-subtitle{ font-size: 16px; }
+            }
+
+
+        /* ========================================
+           BOTONES
            ======================================== */
         .stButton > button {
             width: 100%;
@@ -35,263 +137,182 @@ def inject_mobile_css():
             border-radius: 12px;
             margin: 10px 0;
             transition: all 0.3s ease;
+            border: 2px solid transparent;
         }
-        
+
         .stButton > button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            box-shadow: 0 6px 20px rgba(0, 217, 255, 0.3);
         }
-        
-        /* Botón primario más destacado */
+
         .stButton > button[kind="primary"] {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, $COLOR_CYAN 0%, $COLOR_AZUL_OSCURO 100%);
             border: none;
+            color: white;
         }
-        
+
+        .stButton > button[kind="primary"]:hover {
+            box-shadow: 0 8px 24px rgba(0, 217, 255, 0.4);
+        }
+
+        .stButton > button[kind="secondary"] {
+            background: white;
+            border: 2px solid $COLOR_CYAN;
+            color: $COLOR_AZUL_OSCURO;
+        }
+
         /* ========================================
-           INPUTS - Más grandes para móvil
+           INPUTS
            ======================================== */
         .stTextInput > div > div > input,
-        .stTextArea > div > div > textarea {
+        .stTextArea > div > div > textarea,
+        .stSelectbox > div > div > select {
             font-size: 16px !important;
-            padding: 12px !important;
-            border-radius: 8px !important;
+            padding: 14px 12px !important;
+            border-radius: 10px !important;
+            border: 2px solid #e0e0e0 !important;
+            transition: all 0.3s ease !important;
         }
-        
+
+        .stTextInput > div > div > input:focus,
+        .stTextArea > div > div > textarea:focus,
+        .stSelectbox > div > div > select:focus {
+            border-color: $COLOR_CYAN !important;
+            box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.1) !important;
+        }
+
         /* ========================================
-           FILE UPLOADER - Área táctil grande
+           FILE UPLOADER
            ======================================== */
-        .uploadedFile {
+        [data-testid="stFileUploader"] {
+            border: 2px dashed $COLOR_CYAN;
             border-radius: 12px;
+            padding: 20px;
+            background: rgba(0, 217, 255, 0.05);
         }
-        
+
         /* ========================================
-           CHECKBOXES - Más grandes y espaciados
+           ESPACIADO GLOBAL (quita “amarillo”)
            ======================================== */
-        .stCheckbox {
-            padding: 8px 0;
+        .block-container{
+            padding-top: 1rem;
+            padding-bottom: 1.5rem;
         }
-        
-        .stCheckbox > label {
-            font-size: 16px;
-        }
-        
-        /* ========================================
-           CARDS Y CONTENEDORES
-           ======================================== */
-        .stExpander {
-            border-radius: 12px;
-            border: 1px solid #e0e0e0;
-        }
-        
-        /* ========================================
-           ALERTAS Y BANNERS
-           ======================================== */
-        .stAlert {
-            border-radius: 12px;
-            padding: 16px;
-            margin: 12px 0;
-        }
-        
-        /* ========================================
-           PROGRESS BAR
-           ======================================== */
-        .stProgress > div > div > div {
-            border-radius: 10px;
-            height: 12px;
-        }
-        
-        /* ========================================
-           RESPONSIVE - Ajustes para tablets y desktop
-           ======================================== */
-        @media (min-width: 768px) {
-            .stButton > button {
-                max-width: 500px;
-                margin: 10px auto;
+
+        @media (min-width: 768px){
+            .block-container{
+                max-width: 900px;
+                padding: 1.5rem 1rem;
             }
         }
-        
-        /* ========================================
-           ESPACIADO GENERAL
-           ======================================== */
-        .block-container {
-            padding-top: 2rem;
-            padding-bottom: 2rem;
-        }
-        
-        /* ========================================
-           TABS - Mejor legibilidad
-           ======================================== */
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 8px;
-        }
-        
-        .stTabs [data-baseweb="tab"] {
-            padding: 12px 20px;
-            font-size: 16px;
-        }
     </style>
-    """, unsafe_allow_html=True)
+    """).substitute(
+        COLOR_CYAN=COLOR_CYAN,
+        COLOR_AZUL_OSCURO=COLOR_AZUL_OSCURO,
+        COLOR_VERDE=COLOR_VERDE,
+        COLOR_NEGRO=COLOR_NEGRO,
+        COLOR_GRIS=COLOR_GRIS,
+    )
+
+    st.markdown(css, unsafe_allow_html=True)
+
 
 
 # ============================================================
-# PROGRESS BAR CON MENSAJES
+# COMPONENTES DE UI
 # ============================================================
 
-def mostrar_progreso_con_mensajes(mensajes: list):
+@st.cache_data(show_spinner=False)
+def get_logo_data_url():
     """
-    Muestra un progress bar animado con mensajes dinámicos.
-    
-    Args:
-        mensajes: Lista de tuplas (porcentaje, mensaje, tiempo_segundos)
-        
-    Example:
-        >>> mensajes = [
-        >>>     (20, "📸 Analizando portada...", 3),
-        >>>     (60, "🔍 Buscando reseñas...", 30),
-        >>>     (100, "✅ ¡Listo!", 2)
-        >>> ]
-        >>> mostrar_progreso_con_mensajes(mensajes)
+    Devuelve un Data URL base64 del logo si existe, o None.
+    (Sin tipado 'str | None' para evitar errores en Python < 3.10)
     """
-    import time
-    
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-    
-    for porcentaje, mensaje, segundos in mensajes:
-        progress_bar.progress(porcentaje)
-        status_text.write(mensaje)
-        time.sleep(segundos)
-    
-    # Limpiar al final
-    progress_bar.empty()
-    status_text.empty()
+    if not LOGO_PATH.exists():
+        return None
+
+    data = LOGO_PATH.read_bytes()
+    b64 = base64.b64encode(data).decode("utf-8")
+    return f"data:image/png;base64,{b64}"
 
 
-# ============================================================
-# VALIDACIÓN DE EMAIL
-# ============================================================
+def mostrar_header():
+    """
+    Header con 3 líneas:
+    - LibrIA
+    - ¿De qué trata el libro?
+    - subtítulo en cursiva
+    """
+    logo_data_url = get_logo_data_url()
+
+    logo_html = (
+        f'<img src="{logo_data_url}" alt="LibrIA Logo" class="libria-logo">'
+        if logo_data_url
+        else '<div style="font-size:42px; line-height:1;">📚</div>'
+    )
+
+    st.markdown(f"""
+        <div class="libria-header-wrap">
+        <div class="libria-header">
+            {logo_html}
+            <div class="libria-header-text">
+                <div class="libria-brand">LibrIA</div>
+                <div class="libria-title">¿De qué trata el libro?</div>
+                <div class="libria-subtitle">Descúbrelo fácil y rápido, solo necesitas una foto/imagen de la portada del libro</div>
+            </div>
+        </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+
+
+def mostrar_cuota(restantes: int):
+    """
+    Muestra contador de búsquedas restantes.
+    """
+    if restantes <= 0:
+        st.error("❌ Has agotado tus 3 búsquedas gratuitas")
+    elif restantes == 1:
+        st.warning(f"⚠️ Te queda **{restantes}** búsqueda gratuita")
+    else:
+        st.info(f"⚡ Te quedan **{restantes}** de 3 búsquedas gratuitas")
+
 
 def validar_email(email: str) -> bool:
     """
-    Valida formato básico de email.
-    
-    Args:
-        email: String del email a validar
-        
-    Returns:
-        bool: True si el formato es válido
-        
-    Example:
-        >>> validar_email("usuario@example.com")
-        True
-        >>> validar_email("email-invalido")
-        False
+    Valida formato de email.
     """
-    import re
-    
-    # Patrón regex básico para email
-    # No es perfecto pero suficiente para validación básica
-    patron = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    
-    return bool(re.match(patron, email))
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return re.match(pattern, email) is not None
 
-
-# ============================================================
-# VALIDACIÓN DE TELÉFONO
-# ============================================================
 
 def validar_telefono(telefono: str) -> bool:
     """
-    Valida formato básico de número de teléfono.
-    
-    Acepta formatos:
-    - +593999888777
-    - +593-999-888-777
-    - +593 999 888 777
-    
-    Args:
-        telefono: String del teléfono a validar
-        
-    Returns:
-        bool: True si el formato es válido
+    Valida formato de teléfono internacional.
     """
-    import re
-    
-    # Remover espacios, guiones y paréntesis
-    telefono_limpio = re.sub(r'[\s\-\(\)]', '', telefono)
-    
-    # Debe empezar con + y tener entre 10 y 15 dígitos
-    patron = r'^\+\d{10,15}$'
-    
-    return bool(re.match(patron, telefono_limpio))
+    pattern = r'^\+\d{10,15}$'
+    return re.match(pattern, telefono) is not None
 
-
-# ============================================================
-# SELECTOR DE CÓDIGO DE PAÍS
-# ============================================================
 
 def get_codigos_pais() -> dict:
     """
     Retorna diccionario de códigos de país para Telegram.
-    
-    Incluye todos los países de América + España + opción manual.
-    
-    Returns:
-        dict: {nombre_pais: codigo}
     """
     return {
         "🇪🇨 Ecuador": "+593",
         "🇨🇴 Colombia": "+57",
         "🇵🇪 Perú": "+51",
-        "🇲🇽 México": "+52",
         "🇦🇷 Argentina": "+54",
-        "🇨🇱 Chile": "+56",
+        "🇲🇽 México": "+52",
         "🇪🇸 España": "+34",
-        "🇺🇸 Estados Unidos": "+1",
-        "🇻🇪 Venezuela": "+58",
-        "🇺🇾 Uruguay": "+598",
-        "🇵🇾 Paraguay": "+595",
-        "🇧🇴 Bolivia": "+591",
-        "🇬🇹 Guatemala": "+502",
-        "🇭🇳 Honduras": "+504",
-        "🇸🇻 El Salvador": "+503",
-        "🇨🇷 Costa Rica": "+506",
-        "🇵🇦 Panamá": "+507",
-        "🇳🇮 Nicaragua": "+505",
-        "🇨🇺 Cuba": "+53",
-        "🇩🇴 Rep. Dominicana": "+1-809",
-        "🌍 Otro país (ingresar código)": "manual"
+        "🇺🇸 USA": "+1",
+        "🌍 Otro país (ingresar código)": "MANUAL"
     }
 
 
-# ============================================================
-# HEADER MEJORADO
-# ============================================================
-
-def mostrar_header():
+def mostrar_progreso_con_mensajes(progreso: int, mensaje: str):
     """
-    Muestra header mejorado con título y descripción.
+    Muestra barra de progreso con mensaje.
     """
-    st.title("📚 Libria - ¿De qué trata el libro?")
-    st.markdown("*Descúbrelo fácil y rápido, solo necesitas una foto/imagen de la portada del libro*")
-    
-    # Instrucciones colapsables
-    with st.expander("📖 ¿Cómo funciona?", expanded=False):
-        st.markdown("""
-        **Paso 1:** 📸 Toma una foto o sube una imagen de la portada del libro
-        
-        **Paso 2:** 📬 Elige cómo quieres recibir tu reseña:
-        - 👀 Visualizar en pantalla (siempre incluido)
-        - 📧 PDF por correo (opcional)
-        - 🎧 Audio resumen por Telegram (opcional)
-        
-        **Paso 3:** ✅ ¡Listo! En segundos tendrás tu reseña completa
-        
-        ---
-        
-        **💡 Tips para mejores resultados:**
-        - Foto frontal y centrada de la portada
-        - Buena iluminación sin reflejos
-        - Texto del título y autor legible
-        """)
+    st.progress(progreso / 100)
+    st.write(mensaje)

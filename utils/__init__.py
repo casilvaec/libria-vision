@@ -19,6 +19,9 @@ from .ui_components import (
     get_codigos_pais
 )
 
+from .pdf_generator import generar_pdf
+from .email_sender import enviar_pdf_email
+
 __all__ = [
     'get_device_fingerprint',
     'check_rate_limit',
@@ -29,5 +32,7 @@ __all__ = [
     'validar_email',
     'validar_telefono',
     'mostrar_header',
-    'get_codigos_pais'
+    'get_codigos_pais',
+    'generar_pdf',
+    'enviar_pdf_email'
 ]

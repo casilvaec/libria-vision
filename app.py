@@ -1,6 +1,9 @@
 # ============================================================
-# IMPORTS
+# LIBRIA - APP PRINCIPAL
 # ============================================================
+# Aplicación de reseñas inteligentes de libros
+# Versión 3.1 - Con campos condicionales reactivos y Telegram QR
+
 import os
 import json
 import base64
@@ -27,6 +30,8 @@ from utils.ui_components import (
     mostrar_header,
     get_codigos_pais
 )
+from utils.pdf_generator import generar_pdf
+from utils.email_sender import enviar_pdf_email
 
 
 # ============================================================
@@ -114,11 +119,22 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Inyectar CSS Mobile-First
+# Inyectar CSS Mobile-First con branding
 inject_mobile_css()
 
 # Mostrar header mejorado
 mostrar_header()
+
+
+# Debug solo en consola/log (no en UI)
+if SHOW_DEBUG_ERRORS:
+    from pathlib import Path
+    logger.info(
+        "Logo exists: %s",
+        (Path(__file__).resolve().parent / "assets" / "logo-libria-transparente.png").exists()
+    )
+
+
 
 
 # ============================================================
@@ -204,7 +220,7 @@ def extract_title_author(client: OpenAI, image_bytes: bytes, mime: str) -> dict:
     return result
 
 
-def llamar_n8n_webhook(titulo: str, autor: str, email: str = None, telefono: str = None) -> dict:
+def llamar_n8n_webhook(titulo: str, autor: str, email: str = None, telegram_code: str = None) -> dict:
     """
     Llama al webhook de n8n para buscar reseñas.
     
@@ -212,7 +228,7 @@ def llamar_n8n_webhook(titulo: str, autor: str, email: str = None, telefono: str
         titulo: Título del libro
         autor: Autor del libro
         email: Email del usuario (opcional)
-        telefono: Teléfono de Telegram (opcional)
+        telegram_code: Código QR de Telegram (opcional)
         
     Returns:
         dict: Respuesta JSON del webhook con la ficha completa
@@ -229,8 +245,8 @@ def llamar_n8n_webhook(titulo: str, autor: str, email: str = None, telefono: str
         "requestId": f"req-{int(time.time())}",
         "device_id": device_id,
         "email": email,
-        "telefono": telefono,
-        "generar_audio": bool(telefono)
+        "telegram_code": telefono_completo,  # Nuevo: código QR en lugar de teléfono
+        "generar_audio": bool(telegram_code)
     }
     
     logger.info(f"Llamando webhook n8n para: {titulo} - {autor}")
@@ -256,21 +272,20 @@ def llamar_n8n_webhook(titulo: str, autor: str, email: str = None, telefono: str
 # ============================================================
 st.write("### 📸 Paso 1: Sube la portada del libro")
 
-col1, col2 = st.columns(2)
-with col1:
-    foto = st.camera_input("📷 Tomar foto")
-with col2:
-    archivo = st.file_uploader("📁 O subir imagen", type=["jpg", "jpeg", "png", "webp"])
+# Solo file uploader (sin cámara)
+archivo = st.file_uploader(
+    "Selecciona una imagen",
+    type=["jpg", "jpeg", "png", "webp"],
+    help="Sube una foto clara de la portada del libro"
+)
 
-imagen = foto or archivo
-
-if not imagen:
-    st.info("👆 Toma una foto o sube una imagen para comenzar")
+if not archivo:
+    st.info("👆 Sube una imagen para comenzar")
     st.stop()
 
 # Validar tamaño de imagen
-image_bytes = imagen.read()
-mime = imagen.type or "image/jpeg"
+image_bytes = archivo.read()
+mime = archivo.type or "image/jpeg"
 
 if len(image_bytes) > MAX_IMAGE_BYTES:
     size_mb = len(image_bytes) / 1024 / 1024
@@ -278,7 +293,7 @@ if len(image_bytes) > MAX_IMAGE_BYTES:
     st.error(f"❌ La imagen es muy pesada ({size_mb:.2f} MB). Máximo {MAX_IMAGE_MB} MB.")
     st.info(
         "💡 **Tip:** Reduce el tamaño en [TinyPNG](https://tinypng.com) "
-        "o toma la foto en resolución media."
+        "o ajusta la calidad de la foto."
     )
     st.stop()
 
@@ -287,37 +302,46 @@ st.image(image_bytes, caption="Portada cargada", use_container_width=True)
 
 
 # ============================================================
-# UI PRINCIPAL - PASO 2: OPCIONES DE ENTREGA
+# UI PRINCIPAL - PASO 2: OPCIONES DE ENTREGA (REACTIVAS)
 # ============================================================
 st.write("### 📬 Paso 2: ¿Cómo quieres recibir tu reseña?")
 
-with st.form("opciones_entrega"):
-    st.write("Selecciona al menos una opción adicional:")
-    
-    # Visualizar en pantalla - SIEMPRE ACTIVO Y NO SE PUEDE DESMARCAR
-    st.checkbox("👀 Visualizar en pantalla", value=True, disabled=True, 
-                help="Siempre se mostrará en pantalla")
-    mostrar_web = True  # Forzar a True
-    
-    # Email opcional
-    enviar_email = st.checkbox("📧 Recibir PDF por correo")
-    email = ""
-    if enviar_email:
+st.write("Selecciona al menos una opción adicional:")
+
+# Visualizar en pantalla - SIEMPRE ACTIVO
+st.checkbox("👀 Visualizar en pantalla", value=True, disabled=True, 
+            help="Siempre se mostrará en pantalla", key="mostrar_web")
+
+# Email opcional - CON CAMPO CONDICIONAL REACTIVO
+enviar_email = st.checkbox("📧 Recibir PDF por correo", key="check_email")
+
+# Contenedor reactivo para email
+email_container = st.empty()
+email = ""
+
+if enviar_email:
+    with email_container.container():
         email = st.text_input(
             "Tu email",
             placeholder="tu@email.com",
-            help="Enviaremos un PDF con la reseña completa"
+            help="Enviaremos un PDF con la reseña completa",
+            key="input_email"
         )
-    
-    # Telegram opcional con selector de país
-    enviar_telegram = st.checkbox("🎧 Audio resumen por Telegram (1 min)")
-    telefono_completo = ""
-    pais_seleccionado = None
-    codigo_manual = ""
-    numero = ""
-    
-    if enviar_telegram:
-        # Obtener códigos de país
+
+
+
+# ============================================================
+# TELEGRAM CON TELÉFONO
+# ============================================================
+
+
+enviar_telegram = st.checkbox("🎧 Audio resumen por Telegram (1 min)", key="check_telegram")
+
+telegram_container = st.empty()
+telefono_completo = ""
+
+if enviar_telegram:
+    with telegram_container.container():
         codigos_pais = get_codigos_pais()
         
         col_pais, col_numero = st.columns([1, 2])
@@ -325,47 +349,49 @@ with st.form("opciones_entrega"):
             pais_seleccionado = st.selectbox(
                 "País",
                 list(codigos_pais.keys()),
-                index=0,  # Ecuador por defecto
-                help="Selecciona tu código de país"
+                index=0,
+                help="Selecciona tu código de país",
+                key="select_pais"
             )
         
         with col_numero:
-            # Si seleccionó "Otro país", mostrar input para código manual
             if pais_seleccionado == "🌍 Otro país (ingresar código)":
                 codigo_manual = st.text_input(
                     "Código país",
                     placeholder="+1, +44, +86...",
-                    help="Ejemplo: +1 (USA), +44 (UK), +86 (China)"
+                    help="Ejemplo: +1 (USA), +44 (UK)",
+                    key="input_codigo"
                 )
                 numero = st.text_input(
                     "Número",
                     placeholder="999-888-777",
-                    help="Solo el número sin código de país"
+                    help="Solo el número sin código de país",
+                    key="input_numero"
                 )
                 
-                # Combinar código manual + número
                 if codigo_manual and numero:
                     numero_limpio = numero.replace("-", "").replace(" ", "")
                     telefono_completo = f"{codigo_manual}{numero_limpio}"
             else:
-                # País de la lista: usar código predefinido
                 numero = st.text_input(
                     "Número",
                     placeholder="999-888-777",
-                    help="Solo el número sin código de país"
+                    help="Solo el número sin código de país",
+                    key="input_numero"
                 )
                 
-                # Combinar código de país + número
                 if numero:
                     codigo = codigos_pais[pais_seleccionado]
                     numero_limpio = numero.replace("-", "").replace(" ", "")
                     telefono_completo = f"{codigo}{numero_limpio}"
-    
-    submitted = st.form_submit_button(
-        "🚀 OBTENER MI RESEÑA",
-        type="primary",
-        use_container_width=True
-    )
+
+
+# Botón de envío
+submitted = st.button(
+    "🚀 OBTENER MI RESEÑA",
+    type="primary",
+    use_container_width=True
+)
 
 
 # ============================================================
@@ -395,32 +421,6 @@ if submitted:
             st.stop()
     
     # ========================================
-    # VALIDACIÓN 3: Teléfono (si fue seleccionado)
-    # ========================================
-    if enviar_telegram:
-        if not numero:
-            st.error("⚠️ Ingresa tu número de Telegram")
-            st.stop()
-        
-        # Validación especial si es "Otro país"
-        if pais_seleccionado == "🌍 Otro país (ingresar código)":
-            if not codigo_manual:
-                st.error("⚠️ Ingresa el código de país (ej: +44 para UK)")
-                st.stop()
-            if not codigo_manual.startswith("+"):
-                st.error("⚠️ El código de país debe empezar con + (ej: +44)")
-                st.stop()
-        
-        if not validar_telefono(telefono_completo):
-            st.error(
-                "⚠️ Número inválido. Verifica que:\n\n"
-                "• El código de país sea correcto (ej: +593)\n"
-                "• El número solo contenga dígitos\n"
-                "• Formato: +593-999-888-777"
-            )
-            st.stop()
-    
-    # ========================================
     # PASO 1: OCR - EXTRAER TÍTULO Y AUTOR
     # ========================================
     with st.spinner("📸 Analizando portada con IA..."):
@@ -444,6 +444,15 @@ if submitted:
             st.stop()
     
     # ========================================
+    # GENERAR CÓDIGO QR PARA TELEGRAM
+    # ========================================
+    if enviar_telegram:
+        # Generar código único
+        import secrets
+        telegram_code = secrets.token_urlsafe(8)  # Código aleatorio seguro
+        logger.info(f"Código Telegram generado: {telegram_code}")
+    
+    # ========================================
     # PASO 2: LLAMAR N8N PARA BUSCAR RESEÑAS
     # ========================================
     progress_bar = st.progress(0)
@@ -460,7 +469,7 @@ if submitted:
             titulo=titulo,
             autor=autor,
             email=email if enviar_email else None,
-            telefono=telefono_completo if enviar_telegram else None
+            telegram_code=telegram_code if enviar_telegram else None
         )
         
         # Progress: 60%
@@ -489,34 +498,29 @@ if submitted:
         # Extraer datos de la respuesta
         ficha_data = resultado_n8n.get("body", resultado_n8n)
         
-        # SIEMPRE mostrar en web (está forzado a True)
         st.success("🎉 ¡Tu reseña está lista!")
         
         # Mostrar en tabs
         tab1, tab2, tab3 = st.tabs(["📚 Resumen", "📊 Detalles", "🔧 JSON"])
         
         with tab1:
-            # Información básica
             if "informacion_basica" in ficha_data:
                 info = ficha_data["informacion_basica"]
                 st.write(f"### {info.get('titulo', titulo)}")
                 st.write(f"**Autor:** {info.get('autor', autor)}")
             
-            # Clasificación
             if "clasificacion" in ficha_data:
                 clasif = ficha_data["clasificacion"]
                 st.write(f"**Género:** {clasif.get('genero_principal', 'N/A')}")
             
             st.divider()
             
-            # Sinopsis
             if "contenido" in ficha_data:
                 contenido = ficha_data["contenido"]
                 st.write("#### 📖 Sinopsis")
                 st.write(contenido.get("sinopsis", "No disponible"))
         
         with tab2:
-            # Temas clave
             if "clasificacion" in ficha_data:
                 clasif = ficha_data["clasificacion"]
                 if "temas_clave" in clasif:
@@ -524,7 +528,6 @@ if submitted:
                     for tema in clasif["temas_clave"]:
                         st.write(f"• {tema}")
             
-            # Métricas
             if "estadisticas" in resultado_n8n:
                 st.write("#### 📊 Métricas de Calidad")
                 stats_str = resultado_n8n["estadisticas"]
@@ -538,14 +541,58 @@ if submitted:
         with tab3:
             st.json(ficha_data)
         
-        # Mensajes de confirmación para email y telegram
+        # ========================================
+        # ENVIAR PDF POR EMAIL
+        # ========================================
         if enviar_email:
-            st.success(f"📧 PDF enviado a **{email}**")
-            st.info("Revisa tu bandeja de entrada (y spam por si acaso)")
+            try:
+                with st.spinner("📄 Generando PDF..."):
+                    pdf_bytes = generar_pdf(ficha_data, titulo, autor)
+                
+                with st.spinner(f"📧 Enviando a {email}..."):
+                    enviar_pdf_email(email, pdf_bytes, titulo)
+                
+                st.success(f"✅ PDF enviado exitosamente a **{email}**")
+                st.info("📬 Revisa tu bandeja de entrada (y spam por si acaso)")
+                
+            except Exception as e:
+                logger.error(f"Error al generar/enviar PDF: {str(e)}", exc_info=True)
+                st.error(f"❌ No se pudo enviar el PDF. Error: {str(e)}")
+                if SHOW_DEBUG_ERRORS:
+                    st.exception(e)
         
-        if enviar_telegram:
-            st.success(f"🎧 Audio enviado a Telegram: **{telefono_completo}**")
-            st.info("Abre tu app de Telegram para escuchar el resumen")
+        # ========================================
+        # MOSTRAR QR PARA TELEGRAM
+        # ========================================
+        if enviar_telegram and telegram_code:
+            st.markdown("---")
+            st.write("### 🎧 Recibe tu audio en Telegram")
+            
+            # Generar URL del bot con código
+            bot_username = os.getenv("TELEGRAM_BOT_USERNAME", "LibriaBot")
+            telegram_url = f"https://t.me/{bot_username}?start={telegram_code}"
+            
+            # Generar QR usando API externa
+            qr_api_url = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={telegram_url}"
+            
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.image(qr_api_url, caption="Escanea con Telegram")
+                st.markdown(
+                    f"<div class='qr-container'>"
+                    f"<p><strong>O haz clic aquí:</strong></p>"
+                    f"<a href='{telegram_url}' target='_blank' style='color: #00D9FF; font-size: 18px;'>"
+                    f"Abrir en Telegram 📱</a>"
+                    f"</div>",
+                    unsafe_allow_html=True
+                )
+            
+            st.info(
+                "📱 **Instrucciones:**\n\n"
+                "1. Escanea el código QR con tu app de Telegram\n"
+                "2. O haz clic en el link si estás en móvil\n"
+                "3. El bot te enviará tu audio automáticamente"
+            )
         
         # ========================================
         # INCREMENTAR CONTADOR DE USO
@@ -575,7 +622,7 @@ if submitted:
 st.divider()
 st.caption(
     "🤖 Powered by OpenAI GPT-4o-mini Vision + n8n | "
-    "📝 LibrIA v3.0 | "
+    "📝 LibrIA v3.1 | "
     f"🐛 Debug: {'ON' if SHOW_DEBUG_ERRORS else 'OFF'}"
 )
 
