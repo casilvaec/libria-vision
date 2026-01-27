@@ -312,8 +312,31 @@ st.write("Selecciona al menos una opción adicional:")
 st.checkbox("👀 Visualizar en pantalla", value=True, disabled=True, 
             help="Siempre se mostrará en pantalla", key="mostrar_web")
 
-# Email opcional - CON CAMPO CONDICIONAL REACTIVO
+# Email opcional - CON CAMPO CONDICIONAL REACTIVO (VALIDACIÓN EN VIVO)
 enviar_email = st.checkbox("📧 Recibir PDF por correo", key="check_email")
+
+# --- Estado inicial (solo la 1era vez) ---
+if "email_valido" not in st.session_state:
+    st.session_state.email_valido = False
+if "email_error" not in st.session_state:
+    st.session_state.email_error = ""
+
+# --- Callback: se ejecuta cada vez que cambia el input ---
+def _validar_email_en_vivo():
+    val = (st.session_state.get("input_email") or "").strip()
+
+    if not val:
+        st.session_state.email_valido = False
+        st.session_state.email_error = "⚠️ Ingresa tu email"
+        return
+
+    if not validar_email(val):
+        st.session_state.email_valido = False
+        st.session_state.email_error = "⚠️ Email inválido. Formato correcto: usuario@dominio.com"
+        return
+
+    st.session_state.email_valido = True
+    st.session_state.email_error = ""
 
 # Contenedor reactivo para email
 email_container = st.empty()
@@ -325,8 +348,18 @@ if enviar_email:
             "Tu email",
             placeholder="tu@email.com",
             help="Enviaremos un PDF con la reseña completa",
-            key="input_email"
+            key="input_email",
+            on_change=_validar_email_en_vivo
         )
+
+        # Mostrar feedback inmediato (UX)
+        if st.session_state.email_error:
+            st.error(st.session_state.email_error)
+        
+else:
+    # Si desmarcan el checkbox, limpias estado (evita que quede “válido” guardado)
+    st.session_state.email_valido = False
+    st.session_state.email_error = ""
 
 
 
@@ -386,12 +419,26 @@ if enviar_telegram:
                     telefono_completo = f"{codigo}{numero_limpio}"
 
 
-# Botón de envío
+# Reglas para habilitar el botón (POR AHORA SOLO EMAIL)
+# - Debe seleccionar al menos una opción adicional (email o telegram)
+# - Si selecciona email, el email debe ser válido
+opcion_adicional = enviar_email or enviar_telegram
+email_ok = (not enviar_email) or bool(st.session_state.email_valido)
+
+puede_enviar = opcion_adicional and email_ok
+
 submitted = st.button(
     "🚀 OBTENER MI RESEÑA",
     type="primary",
-    use_container_width=True
+    use_container_width=True,
+    disabled=not puede_enviar
 )
+
+# Mensaje guía (UX)
+if not opcion_adicional:
+    st.info("Selecciona al menos una opción adicional (correo o Telegram) para habilitar el botón.")
+elif enviar_email and not st.session_state.email_valido:
+    st.info("Ingresa un email válido para habilitar el botón.")
 
 
 # ============================================================

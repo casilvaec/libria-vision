@@ -63,6 +63,8 @@ def inject_mobile_css():
         [data-testid="stAppViewContainer"] > .main {
             background: #F4F8FF; /* azul muy claro, tech */
         }
+                   
+                  
 
         h1, h2, h3, h4, h5, h6 {
             font-family: 'Space Grotesk', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -153,9 +155,17 @@ def inject_mobile_css():
             border: 2px solid transparent;
         }
 
-        .stButton > button:hover {
+        .stButton > button:not(:disabled):hover {
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(0, 217, 255, 0.3);
+        }
+                   
+        .stButton > button:disabled{
+            opacity: 0.45;
+            filter: grayscale(35%);
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
         }
 
         .stButton > button[kind="primary"] {
