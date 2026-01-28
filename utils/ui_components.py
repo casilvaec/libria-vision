@@ -98,6 +98,8 @@ def inject_mobile_css():
 
             .libria-header-wrap .libria-header-text{
             line-height: 1.15;
+            flex: 1 1 auto;
+            min-width: 0; /* evita recortes dentro de flex */
             }
 
             .libria-header-wrap .libria-brand{
@@ -122,6 +124,28 @@ def inject_mobile_css():
             font-style: italic;
             color: var(--color-gris);
             max-width: 70ch;
+            }
+                   
+            /* MOBILE: bajar un poco el texto (mantener layout horizontal) */
+            @media (max-width: 767px){
+            .libria-header-wrap .libria-header{
+                align-items: flex-start;
+                padding-top: 18px;   /* ✅ baja TODO el header (logo+texto) */
+            }
+
+            .libria-header-wrap .libria-logo{
+                margin-top: 4px;     /* ✅ baja un poco el logo */
+            }
+
+            .libria-header-wrap .libria-header-text{
+                margin-top: 14px;    /* ✅ baja más el texto */
+                flex: 1 1 auto;
+                min-width: 0;
+            }
+
+            .libria-header-wrap .libria-brand{ font-size: 26px; }
+            .libria-header-wrap .libria-title{ font-size: 20px; }
+            .libria-header-wrap .libria-subtitle{ font-size: 14px; }
             }
 
             /* TABLET */

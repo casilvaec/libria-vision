@@ -228,17 +228,17 @@ def llamar_n8n_webhook(
     titulo: str,
     autor: str,
     email: str = None,
-    telefono: str = None,
+    
     telegram_code: str = None
 ) -> dict:
     """
     Llama al webhook de n8n para buscar reseñas.
     
     Args:
-        titulo: Título del libro
-        autor: Autor del libro
-        email: Email del usuario (opcional)
-        telegram_code: Código QR de Telegram (opcional)
+        titulo: Título del libro (Obligatorio)
+        autor: Autor del libro (opcional)
+        email: Email del usuario (opcional, pero DEBE estar email O telegram_code)
+        telegram_code: Código challenge de Telegram (opcional, pero DEBE estar email O telegram_code)
         
     Returns:
         dict: Respuesta JSON del webhook con la ficha completa
@@ -255,7 +255,7 @@ def llamar_n8n_webhook(
         "requestId": f"req-{int(time.time())}",
         "device_id": device_id,
         "email": email,
-        "telefono": telefono,     # E.164, solo si eligió Telegram
+            # E.164, solo si eligió Telegram
         "telegram_code": telegram_code,    # código start del bot
         "generar_audio": bool(telegram_code)
     }
@@ -277,6 +277,61 @@ def llamar_n8n_webhook(
         logger.error(f"Error al llamar n8n webhook: {str(e)}")
         raise Exception(f"Error al conectar con el servidor: {str(e)}")
 
+# ============================================================
+# FUNCIONES TELEGRAM CHALLENGE
+# ============================================================
+
+def generar_challenge() -> str:
+    """
+    Genera código aleatorio de 8 caracteres para validación de Telegram.
+    
+    Returns:
+        str: Código único (ej: "AB12CD34")
+    """
+    import secrets
+    return secrets.token_urlsafe(8)[:8].upper()
+
+
+def calcular_firma_esperada(codigo: str) -> str:
+    """
+    Calcula firma HMAC esperada del código usando la clave secreta compartida.
+    
+    Args:
+        codigo: Código challenge generado
+        
+    Returns:
+        str: Firma HMAC en formato hexadecimal (8 caracteres)
+    """
+    import hmac
+    import hashlib
+    
+    secret_key = os.getenv("TELEGRAM_SECRET_KEY", "libria_secret_key_2025_segura")
+    
+    firma = hmac.new(
+        secret_key.encode(),
+        codigo.encode(),
+        hashlib.sha256
+    ).hexdigest()[:8]
+    
+    return firma.upper()
+
+
+def validar_firma(codigo: str, firma_usuario: str) -> bool:
+    """
+    Valida que la firma ingresada por el usuario sea correcta.
+    
+    Args:
+        codigo: Código challenge original
+        firma_usuario: Firma que ingresó el usuario desde el bot
+        
+    Returns:
+        bool: True si la firma es válida
+    """
+    if not firma_usuario:
+        return False
+    
+    firma_esperada = calcular_firma_esperada(codigo)
+    return firma_usuario.upper().strip() == firma_esperada
 
 # ============================================================
 # UI PRINCIPAL - PASO 1: CAPTURA DE IMAGEN
@@ -394,110 +449,212 @@ else:
 # TELEGRAM CON TELÉFONO (VALIDACIÓN REAL CON PHONENUMBERS)
 # ============================================================
 
+# enviar_telegram = st.checkbox(
+#     "🎧 Audio resumen por Telegram (1 min)",
+#     key="check_telegram",
+#     on_change=_toggle_telegram,
+#     disabled=st.session_state.get("check_email", False)
+# )
+
+# telegram_container = st.empty()
+# telefono_completo = ""
+
+# # --- Estado inicial (solo 1era vez) ---
+# if "tel_valido" not in st.session_state:
+#     st.session_state.tel_valido = False
+# if "tel_error" not in st.session_state:
+#     st.session_state.tel_error = ""
+# if "tel_e164" not in st.session_state:
+#     st.session_state.tel_e164 = ""
+
+# regiones_pais = get_regiones_pais()
+
+# def _validar_tel_en_vivo():
+#     pais = st.session_state.get("select_pais")
+#     numero = (st.session_state.get("input_numero") or "").strip()
+
+#     if not numero:
+#         st.session_state.tel_valido = False
+#         st.session_state.tel_error = "⚠️ Ingresa tu número"
+#         st.session_state.tel_e164 = ""
+#         return
+
+#     region = regiones_pais.get(pais, "")
+
+#     try:
+#         # Si es MANUAL, el usuario debe escribir con +código
+#         if region == "MANUAL":
+#             if not numero.startswith("+"):
+#                 st.session_state.tel_valido = False
+#                 st.session_state.tel_error = "⚠️ Para 'Otro país', escribe el número con +código. Ej: +34 600123123"
+#                 st.session_state.tel_e164 = ""
+#                 return
+#             p = phonenumbers.parse(numero, None)
+#         else:
+#             p = phonenumbers.parse(numero, region)
+
+#         if not phonenumbers.is_valid_number(p):
+#             st.session_state.tel_valido = False
+#             st.session_state.tel_error = "⚠️ Número inválido para el país seleccionado"
+#             st.session_state.tel_e164 = ""
+#             return
+
+#         st.session_state.tel_valido = True
+#         st.session_state.tel_error = ""
+#         st.session_state.tel_e164 = phonenumbers.format_number(p, phonenumbers.PhoneNumberFormat.E164)
+
+#     except NumberParseException:
+#         st.session_state.tel_valido = False
+#         st.session_state.tel_error = "⚠️ Número inválido. Revisa el formato."
+#         st.session_state.tel_e164 = ""
+
+# if enviar_telegram:
+#     with telegram_container.container():
+
+#         col_pais, col_numero = st.columns([1, 2])
+
+#         with col_pais:
+#             st.selectbox(
+#                 "País",
+#                 list(regiones_pais.keys()),
+#                 index=0,
+#                 help="Selecciona tu país (validaremos el número automáticamente)",
+#                 key="select_pais",
+#                 on_change=_validar_tel_en_vivo
+#             )
+
+#         with col_numero:
+#             st.text_input(
+#                 "Número",
+#                 placeholder="Ej: 0999888777 (o +34 600123123 si es 'Otro país')",
+#                 help="Puedes escribir con espacios o guiones, lo ajustamos automáticamente",
+#                 key="input_numero",
+#                 on_change=_validar_tel_en_vivo
+#             )
+
+#         # 2) Mostrar error inmediato (si existe)
+#         if st.session_state.tel_error:
+#             st.error(st.session_state.tel_error)
+
+#         # 3) Solo si el teléfono es válido, muestro instrucciones + link
+#         if st.session_state.tel_valido:
+#             st.info(
+#                 "Para recibir tu audio, primero activa nuestro bot:\n\n"
+#                 "1. Abre Telegram en tu teléfono\n"
+#                 "2. Busca: **@LibriaBot** o da click en el link de **\"Abrir el bot ahora\"**\n"
+#                 "3. Presiona **START**\n"
+#                 "4. Regresa aquí\n\n"
+#                 "✅ Solo necesitas hacer esto una vez."
+#             )
+
+#             bot_username = os.getenv("TELEGRAM_BOT_USERNAME", "LibriaBot")
+#             bot_url = f"https://t.me/{bot_username}"
+
+#             st.markdown(f"👉 **Abrir el bot ahora:** {bot_url}")
+
+#             telefono_completo = st.session_state.tel_e164
+# else:
+#     # Si se desmarca, limpia estado para no dejar válido “guardado”
+#     st.session_state.tel_valido = False
+#     st.session_state.tel_error = ""
+#     st.session_state.tel_e164 = ""
+
+
+# ============================================================
+# TELEGRAM CON CHALLENGE (SIN TELÉFONO)
+# ============================================================
+
 enviar_telegram = st.checkbox(
-    "🎧 Audio resumen por Telegram (1 min)",
+    "🎧 Audio resumen por Telegram (1 min aprox.)",
     key="check_telegram",
     on_change=_toggle_telegram,
     disabled=st.session_state.get("check_email", False)
 )
 
-telegram_container = st.empty()
-telefono_completo = ""
+# Estado inicial para challenge
+if "telegram_challenge" not in st.session_state:
+    st.session_state.telegram_challenge = None
+if "telegram_firma_valida" not in st.session_state:
+    st.session_state.telegram_firma_valida = False
+if "telegram_error" not in st.session_state:
+    st.session_state.telegram_error = ""
 
-# --- Estado inicial (solo 1era vez) ---
-if "tel_valido" not in st.session_state:
-    st.session_state.tel_valido = False
-if "tel_error" not in st.session_state:
-    st.session_state.tel_error = ""
-if "tel_e164" not in st.session_state:
-    st.session_state.tel_e164 = ""
-
-regiones_pais = get_regiones_pais()
-
-def _validar_tel_en_vivo():
-    pais = st.session_state.get("select_pais")
-    numero = (st.session_state.get("input_numero") or "").strip()
-
-    if not numero:
-        st.session_state.tel_valido = False
-        st.session_state.tel_error = "⚠️ Ingresa tu número"
-        st.session_state.tel_e164 = ""
-        return
-
-    region = regiones_pais.get(pais, "")
-
-    try:
-        # Si es MANUAL, el usuario debe escribir con +código
-        if region == "MANUAL":
-            if not numero.startswith("+"):
-                st.session_state.tel_valido = False
-                st.session_state.tel_error = "⚠️ Para 'Otro país', escribe el número con +código. Ej: +34 600123123"
-                st.session_state.tel_e164 = ""
-                return
-            p = phonenumbers.parse(numero, None)
-        else:
-            p = phonenumbers.parse(numero, region)
-
-        if not phonenumbers.is_valid_number(p):
-            st.session_state.tel_valido = False
-            st.session_state.tel_error = "⚠️ Número inválido para el país seleccionado"
-            st.session_state.tel_e164 = ""
-            return
-
-        st.session_state.tel_valido = True
-        st.session_state.tel_error = ""
-        st.session_state.tel_e164 = phonenumbers.format_number(p, phonenumbers.PhoneNumberFormat.E164)
-
-    except NumberParseException:
-        st.session_state.tel_valido = False
-        st.session_state.tel_error = "⚠️ Número inválido. Revisa el formato."
-        st.session_state.tel_e164 = ""
+telegram_code = ""
 
 if enviar_telegram:
-    with telegram_container.container():
+    # Generar challenge una sola vez
+    if st.session_state.telegram_challenge is None:
+        st.session_state.telegram_challenge = generar_challenge()
+    
+    codigo_challenge = st.session_state.telegram_challenge
+    bot_username = os.getenv("TELEGRAM_BOT_USERNAME", "libria_resenas_bot")
+    
+    # Mostrar instrucciones
+    st.info(
+        f"📱 **Para recibir tu audio:**\n\n"
+        f"1. Abre Telegram\n"
+        f"2. Busca: **@{bot_username}**\n"
+        f"3. Envía este mensaje:\n\n"
+        f"`/start {codigo_challenge}`\n\n"
+        f"4. El bot te responderá con un código\n"
+        f"5. Pega ese código aquí abajo ⬇️"
+    )
+    
+    # Link directo al bot
+    bot_url = f"https://t.me/{bot_username}?start={codigo_challenge}"
+    st.markdown(f"👉 [Abrir bot ahora]({bot_url})")
+    
+    # Callback para validar firma
+    def _validar_firma_telegram():
+        firma = (st.session_state.get("input_firma_telegram") or "").strip()
+        
+        if not firma:
+            st.session_state.telegram_firma_valida = False
+            st.session_state.telegram_error = ""
+            return
+        
+        if validar_firma(codigo_challenge, firma):
+            st.session_state.telegram_firma_valida = True
+            st.session_state.telegram_error = ""
+            # Guardar el código validado
+            telegram_code = codigo_challenge
+        else:
+            st.session_state.telegram_firma_valida = False
+            st.session_state.telegram_error = "❌ Código incorrecto. Verifica que copiaste bien el código que te dio el bot."
+    
+    # Input para la firma
+    st.text_input(
+        "Código de verificación del bot",
+        placeholder="ABC12345",
+        help="Pega aquí el código que te dio el bot en Telegram",
+        key="input_firma_telegram",
+        on_change=_validar_firma_telegram
+    )
+    
+    # Mostrar error o éxito
+    if st.session_state.telegram_error:
+        st.error(st.session_state.telegram_error)
+    
+    if st.session_state.telegram_firma_valida:
+        st.success("✅ Bot activado correctamente. Ya puedes obtener tu reseña.")
+        telegram_code = codigo_challenge
 
-        col_pais, col_numero = st.columns([1, 2])
-
-        with col_pais:
-            st.selectbox(
-                "País",
-                list(regiones_pais.keys()),
-                index=0,
-                help="Selecciona tu país (validaremos el número automáticamente)",
-                key="select_pais",
-                on_change=_validar_tel_en_vivo
-            )
-
-        with col_numero:
-            st.text_input(
-                "Número",
-                placeholder="Ej: 0999888777 (o +34 600123123 si es 'Otro país')",
-                help="Puedes escribir con espacios o guiones, se normaliza automáticamente",
-                key="input_numero",
-                on_change=_validar_tel_en_vivo
-            )
-
-        if st.session_state.tel_error:
-            st.error(st.session_state.tel_error)
-
-    telefono_completo = st.session_state.tel_e164
 else:
-    # Si se desmarca, limpia estado para no dejar válido “guardado”
-    st.session_state.tel_valido = False
-    st.session_state.tel_error = ""
-    st.session_state.tel_e164 = ""
-
+    # Si desmarca, limpia estado
+    st.session_state.telegram_challenge = None
+    st.session_state.telegram_firma_valida = False
+    st.session_state.telegram_error = ""
 
 # Reglas para habilitar el botón:
 # - Debe escoger SOLO una opción: email XOR telegram
 # - Si escogió email: email válido
-# - Si escogió telegram: teléfono válido
+# - Si escogió telegram: firma validada
 elige_una = (enviar_email ^ enviar_telegram)
 
 email_ok = enviar_email and bool(st.session_state.email_valido)
-tel_ok = enviar_telegram and bool(st.session_state.tel_valido)
+telegram_ok = enviar_telegram and bool(st.session_state.telegram_firma_valida)
 
-puede_enviar = elige_una and (email_ok or tel_ok)
+puede_enviar = elige_una and (email_ok or telegram_ok)
 
 
 
@@ -513,8 +670,8 @@ if not (enviar_email or enviar_telegram):
     st.info("Selecciona **una** opción: correo **o** Telegram, para habilitar el botón.")
 elif enviar_email and not st.session_state.email_valido:
     st.info("Ingresa un email válido para habilitar el botón.")
-elif enviar_telegram and not st.session_state.tel_valido:
-    st.info("Ingresa un número válido para habilitar el botón.")
+elif enviar_telegram and not st.session_state.telegram_firma_valida:
+    st.info("Completa la validación del bot de Telegram para habilitar el botón.")
 
 # ============================================================
 # PROCESAMIENTO Y VALIDACIONES
@@ -566,14 +723,24 @@ if submitted:
             st.stop()
     
     # ========================================
-    # GENERAR CÓDIGO QR PARA TELEGRAM
+    # PREPARAR CÓDIGO TELEGRAM 
     # ========================================
+    ''' 
     if enviar_telegram:
         # Generar código único
         import secrets
         telegram_code = secrets.token_urlsafe(8)  # Código aleatorio seguro
         logger.info(f"Código Telegram generado: {telegram_code}")
-    
+    '''
+    # ========================================
+    # PREPARAR CÓDIGO TELEGRAM (ya validado)
+    # ========================================
+    telegram_code_final = None
+    if enviar_telegram and st.session_state.telegram_firma_valida:
+        telegram_code_final = st.session_state.telegram_challenge
+        logger.info(f"Código Telegram validado: {telegram_code_final}")
+
+
     # ========================================
     # PASO 2: LLAMAR N8N PARA BUSCAR RESEÑAS
     # ========================================
@@ -591,8 +758,8 @@ if submitted:
             titulo=titulo,
             autor=autor,
             email=email if enviar_email else None,
-            telefono=telefono_completo if enviar_telegram else None,
-            telegram_code=telegram_code if enviar_telegram else None
+            telegram_code=telegram_code_final
+            
         )
         
         # Progress: 60%
@@ -685,38 +852,16 @@ if submitted:
                     st.exception(e)
         
         # ========================================
-        # MOSTRAR QR PARA TELEGRAM
+        # CONFIRMACIÓN TELEGRAM
         # ========================================
-        if enviar_telegram and telegram_code:
-            st.markdown("---")
-            st.write("### 🎧 Recibe tu audio en Telegram")
-            
-            # Generar URL del bot con código
-            bot_username = os.getenv("TELEGRAM_BOT_USERNAME", "LibriaBot")
-            telegram_url = f"https://t.me/{bot_username}?start={telegram_code}"
-            
-            # Generar QR usando API externa
-            qr_api_url = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={telegram_url}"
-            
-            col1, col2, col3 = st.columns([1, 2, 1])
-            with col2:
-                st.image(qr_api_url, caption="Escanea con Telegram")
-                st.markdown(
-                    f"<div class='qr-container'>"
-                    f"<p><strong>O haz clic aquí:</strong></p>"
-                    f"<a href='{telegram_url}' target='_blank' style='color: #00D9FF; font-size: 18px;'>"
-                    f"Abrir en Telegram 📱</a>"
-                    f"</div>",
-                    unsafe_allow_html=True
-                )
-            
+        if enviar_telegram:
+            st.success("🎧 Tu audio se está generando y llegará a Telegram en breve")
             st.info(
-                "📱 **Instrucciones:**\n\n"
-                "1. Escanea el código QR con tu app de Telegram\n"
-                "2. O haz clic en el link si estás en móvil\n"
-                "3. El bot te enviará tu audio automáticamente"
+                "📱 **El audio llegará automáticamente**\n\n"
+                "Revisa tu conversación con el bot en Telegram.\n"
+                "Puede tardar 10-30 segundos en llegar."
             )
-        
+
         # ========================================
         # INCREMENTAR CONTADOR DE USO
         # ========================================

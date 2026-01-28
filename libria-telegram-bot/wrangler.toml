@@ -1,0 +1,7 @@
+name = "libria-telegram-bot"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+[[kv_namespaces]]
+binding = "LIBRIA_KV"
+id = "489edc1eb6dc4ee5bfedc80b044783b5"
