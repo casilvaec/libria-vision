@@ -13,6 +13,8 @@ import requests
 import streamlit as st
 from dotenv import load_dotenv
 from openai import OpenAI
+import phonenumbers
+from phonenumbers.phonenumberutil import NumberParseException
 
 # ============================================================
 # IMPORTS - RATE LIMITING Y UI
@@ -28,7 +30,9 @@ from utils.ui_components import (
     validar_email,
     validar_telefono,
     mostrar_header,
-    get_codigos_pais
+    mostrar_footer,
+    get_codigos_pais,
+    get_regiones_pais
 )
 from utils.pdf_generator import generar_pdf
 from utils.email_sender import enviar_pdf_email
@@ -220,7 +224,13 @@ def extract_title_author(client: OpenAI, image_bytes: bytes, mime: str) -> dict:
     return result
 
 
-def llamar_n8n_webhook(titulo: str, autor: str, email: str = None, telegram_code: str = None) -> dict:
+def llamar_n8n_webhook(
+    titulo: str,
+    autor: str,
+    email: str = None,
+    telefono: str = None,
+    telegram_code: str = None
+) -> dict:
     """
     Llama al webhook de n8n para buscar reseñas.
     
@@ -245,7 +255,8 @@ def llamar_n8n_webhook(titulo: str, autor: str, email: str = None, telegram_code
         "requestId": f"req-{int(time.time())}",
         "device_id": device_id,
         "email": email,
-        "telegram_code": telefono_completo,  # Nuevo: código QR en lugar de teléfono
+        "telefono": telefono,     # E.164, solo si eligió Telegram
+        "telegram_code": telegram_code,    # código start del bot
         "generar_audio": bool(telegram_code)
     }
     
@@ -312,8 +323,26 @@ st.write("Selecciona al menos una opción adicional:")
 st.checkbox("👀 Visualizar en pantalla", value=True, disabled=True, 
             help="Siempre se mostrará en pantalla", key="mostrar_web")
 
+# --- Exclusividad: si marca Email, desmarca Telegram; y viceversa ---
+def _toggle_email():
+    if st.session_state.get("check_email"):
+        st.session_state["check_telegram"] = False
+
+def _toggle_telegram():
+    if st.session_state.get("check_telegram"):
+        st.session_state["check_email"] = False
+        # si quieres también limpiar email al pasar a telegram:
+        st.session_state["input_email"] = ""
+        st.session_state["email_valido"] = False
+        st.session_state["email_error"] = ""
+
 # Email opcional - CON CAMPO CONDICIONAL REACTIVO (VALIDACIÓN EN VIVO)
-enviar_email = st.checkbox("📧 Recibir PDF por correo", key="check_email")
+enviar_email = st.checkbox(
+    "📄 Recibir PDF por correo",
+    key="check_email",
+    on_change=_toggle_email,
+    disabled=st.session_state.get("check_telegram", False)
+)
 
 # --- Estado inicial (solo la 1era vez) ---
 if "email_valido" not in st.session_state:
@@ -361,71 +390,117 @@ else:
     st.session_state.email_valido = False
     st.session_state.email_error = ""
 
-
-
 # ============================================================
-# TELEGRAM CON TELÉFONO
+# TELEGRAM CON TELÉFONO (VALIDACIÓN REAL CON PHONENUMBERS)
 # ============================================================
 
-
-enviar_telegram = st.checkbox("🎧 Audio resumen por Telegram (1 min)", key="check_telegram")
+enviar_telegram = st.checkbox(
+    "🎧 Audio resumen por Telegram (1 min)",
+    key="check_telegram",
+    on_change=_toggle_telegram,
+    disabled=st.session_state.get("check_email", False)
+)
 
 telegram_container = st.empty()
 telefono_completo = ""
 
+# --- Estado inicial (solo 1era vez) ---
+if "tel_valido" not in st.session_state:
+    st.session_state.tel_valido = False
+if "tel_error" not in st.session_state:
+    st.session_state.tel_error = ""
+if "tel_e164" not in st.session_state:
+    st.session_state.tel_e164 = ""
+
+regiones_pais = get_regiones_pais()
+
+def _validar_tel_en_vivo():
+    pais = st.session_state.get("select_pais")
+    numero = (st.session_state.get("input_numero") or "").strip()
+
+    if not numero:
+        st.session_state.tel_valido = False
+        st.session_state.tel_error = "⚠️ Ingresa tu número"
+        st.session_state.tel_e164 = ""
+        return
+
+    region = regiones_pais.get(pais, "")
+
+    try:
+        # Si es MANUAL, el usuario debe escribir con +código
+        if region == "MANUAL":
+            if not numero.startswith("+"):
+                st.session_state.tel_valido = False
+                st.session_state.tel_error = "⚠️ Para 'Otro país', escribe el número con +código. Ej: +34 600123123"
+                st.session_state.tel_e164 = ""
+                return
+            p = phonenumbers.parse(numero, None)
+        else:
+            p = phonenumbers.parse(numero, region)
+
+        if not phonenumbers.is_valid_number(p):
+            st.session_state.tel_valido = False
+            st.session_state.tel_error = "⚠️ Número inválido para el país seleccionado"
+            st.session_state.tel_e164 = ""
+            return
+
+        st.session_state.tel_valido = True
+        st.session_state.tel_error = ""
+        st.session_state.tel_e164 = phonenumbers.format_number(p, phonenumbers.PhoneNumberFormat.E164)
+
+    except NumberParseException:
+        st.session_state.tel_valido = False
+        st.session_state.tel_error = "⚠️ Número inválido. Revisa el formato."
+        st.session_state.tel_e164 = ""
+
 if enviar_telegram:
     with telegram_container.container():
-        codigos_pais = get_codigos_pais()
-        
+
         col_pais, col_numero = st.columns([1, 2])
+
         with col_pais:
-            pais_seleccionado = st.selectbox(
+            st.selectbox(
                 "País",
-                list(codigos_pais.keys()),
+                list(regiones_pais.keys()),
                 index=0,
-                help="Selecciona tu código de país",
-                key="select_pais"
+                help="Selecciona tu país (validaremos el número automáticamente)",
+                key="select_pais",
+                on_change=_validar_tel_en_vivo
             )
-        
+
         with col_numero:
-            if pais_seleccionado == "🌍 Otro país (ingresar código)":
-                codigo_manual = st.text_input(
-                    "Código país",
-                    placeholder="+1, +44, +86...",
-                    help="Ejemplo: +1 (USA), +44 (UK)",
-                    key="input_codigo"
-                )
-                numero = st.text_input(
-                    "Número",
-                    placeholder="999-888-777",
-                    help="Solo el número sin código de país",
-                    key="input_numero"
-                )
-                
-                if codigo_manual and numero:
-                    numero_limpio = numero.replace("-", "").replace(" ", "")
-                    telefono_completo = f"{codigo_manual}{numero_limpio}"
-            else:
-                numero = st.text_input(
-                    "Número",
-                    placeholder="999-888-777",
-                    help="Solo el número sin código de país",
-                    key="input_numero"
-                )
-                
-                if numero:
-                    codigo = codigos_pais[pais_seleccionado]
-                    numero_limpio = numero.replace("-", "").replace(" ", "")
-                    telefono_completo = f"{codigo}{numero_limpio}"
+            st.text_input(
+                "Número",
+                placeholder="Ej: 0999888777 (o +34 600123123 si es 'Otro país')",
+                help="Puedes escribir con espacios o guiones, se normaliza automáticamente",
+                key="input_numero",
+                on_change=_validar_tel_en_vivo
+            )
+
+        if st.session_state.tel_error:
+            st.error(st.session_state.tel_error)
+
+    telefono_completo = st.session_state.tel_e164
+else:
+    # Si se desmarca, limpia estado para no dejar válido “guardado”
+    st.session_state.tel_valido = False
+    st.session_state.tel_error = ""
+    st.session_state.tel_e164 = ""
 
 
-# Reglas para habilitar el botón (POR AHORA SOLO EMAIL)
-# - Debe seleccionar al menos una opción adicional (email o telegram)
-# - Si selecciona email, el email debe ser válido
-opcion_adicional = enviar_email or enviar_telegram
-email_ok = (not enviar_email) or bool(st.session_state.email_valido)
+# Reglas para habilitar el botón:
+# - Debe escoger SOLO una opción: email XOR telegram
+# - Si escogió email: email válido
+# - Si escogió telegram: teléfono válido
+elige_una = (enviar_email ^ enviar_telegram)
 
-puede_enviar = opcion_adicional and email_ok
+email_ok = enviar_email and bool(st.session_state.email_valido)
+tel_ok = enviar_telegram and bool(st.session_state.tel_valido)
+
+puede_enviar = elige_una and (email_ok or tel_ok)
+
+
+
 
 submitted = st.button(
     "🚀 OBTENER MI RESEÑA",
@@ -434,12 +509,12 @@ submitted = st.button(
     disabled=not puede_enviar
 )
 
-# Mensaje guía (UX)
-if not opcion_adicional:
-    st.info("Selecciona al menos una opción adicional (correo o Telegram) para habilitar el botón.")
+if not (enviar_email or enviar_telegram):
+    st.info("Selecciona **una** opción: correo **o** Telegram, para habilitar el botón.")
 elif enviar_email and not st.session_state.email_valido:
     st.info("Ingresa un email válido para habilitar el botón.")
-
+elif enviar_telegram and not st.session_state.tel_valido:
+    st.info("Ingresa un número válido para habilitar el botón.")
 
 # ============================================================
 # PROCESAMIENTO Y VALIDACIONES
@@ -516,6 +591,7 @@ if submitted:
             titulo=titulo,
             autor=autor,
             email=email if enviar_email else None,
+            telefono=telefono_completo if enviar_telegram else None,
             telegram_code=telegram_code if enviar_telegram else None
         )
         
@@ -667,10 +743,6 @@ if submitted:
 # FOOTER
 # ============================================================
 st.divider()
-st.caption(
-    "🤖 Powered by OpenAI GPT-4o-mini Vision + n8n | "
-    "📝 LibrIA v3.1 | "
-    f"🐛 Debug: {'ON' if SHOW_DEBUG_ERRORS else 'OFF'}"
-)
+mostrar_footer()
 
 logger.info("Renderizado completo de la página")

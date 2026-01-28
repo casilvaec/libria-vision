@@ -228,6 +228,57 @@ def inject_mobile_css():
                 padding: 1.5rem 1rem;
             }
         }
+                   
+        /* ========================================
+        FOOTER LIBRIA (centrado + logo)
+        ======================================== */
+        .libria-footer{
+            margin: 18px auto 8px auto;
+            padding: 14px 16px;
+            border-radius: 16px;
+            background: rgba(0, 217, 255, 0.06);
+            border: 1px solid rgba(0, 61, 92, 0.10);
+            max-width: 900px;
+        }
+
+        .libria-footer-inner{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            gap: 8px;
+        }
+
+        .libria-footer-logo{
+            width: 44px;
+            height: 44px;
+            object-fit: contain;
+        }
+
+        .libria-footer-title{
+            font-family: 'Space Grotesk', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-weight: 800;
+            font-size: 14px;
+            color: var(--color-azul-oscuro);
+            margin: 0;
+        }
+
+        .libria-footer-line{
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 13px;
+            color: rgba(0, 61, 92, 0.78);
+            margin: 0;
+            line-height: 1.35;
+        }
+
+        .libria-footer-sub{
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 12px;
+            color: rgba(0, 61, 92, 0.60);
+            margin: 4px 0 0 0;
+            line-height: 1.35;
+        }
+
     </style>
     """).substitute(
         COLOR_CYAN=COLOR_CYAN,
@@ -287,6 +338,29 @@ def mostrar_header():
         </div>
         """, unsafe_allow_html=True)
 
+def mostrar_footer():
+    """
+    Footer centrado con logo + 3 líneas de texto.
+    """
+    logo_data_url = get_logo_data_url()
+
+    logo_html = (
+        f'<img src="{logo_data_url}" alt="LibrIA" class="libria-footer-logo">'
+        if logo_data_url
+        else ""
+    )
+
+    st.markdown(f"""
+    <div class="libria-footer">
+      <div class="libria-footer-inner">
+        {logo_html}
+        <p class="libria-footer-title">LibrIA – Reseñas Inteligentes</p>
+        <p class="libria-footer-line">Desarrollado por Carlos Silva</p>
+        <p class="libria-footer-line">Ingeniero en Informática</p>
+        
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 
 def mostrar_cuota(restantes: int):
@@ -329,6 +403,36 @@ def get_codigos_pais() -> dict:
         "🇲🇽 México": "+52",
         "🇪🇸 España": "+34",
         "🇺🇸 USA": "+1",
+        "🌍 Otro país (ingresar código)": "MANUAL"
+    }
+
+def get_regiones_pais() -> dict:
+    """
+    Retorna diccionario label -> ISO region (para phonenumbers).
+    Nota: "MANUAL" significa que el usuario ingresará el número con +código.
+    """
+    return {
+        "🇪🇨 Ecuador": "EC",
+        "🇨🇴 Colombia": "CO",
+        "🇵🇪 Perú": "PE",
+        "🇦🇷 Argentina": "AR",
+        "🇲🇽 México": "MX",
+        "🇺🇸 USA": "US",
+        "🇨🇦 Canadá": "CA",
+        "🇨🇱 Chile": "CL",
+        "🇧🇷 Brasil": "BR",
+        "🇺🇾 Uruguay": "UY",
+        "🇵🇾 Paraguay": "PY",
+        "🇧🇴 Bolivia": "BO",
+        "🇻🇪 Venezuela": "VE",
+        "🇨🇷 Costa Rica": "CR",
+        "🇵🇦 Panamá": "PA",
+        "🇬🇹 Guatemala": "GT",
+        "🇭🇳 Honduras": "HN",
+        "🇸🇻 El Salvador": "SV",
+        "🇳🇮 Nicaragua": "NI",
+        "🇩🇴 Rep. Dominicana": "DO",
+        "🇪🇸 España": "ES",
         "🌍 Otro país (ingresar código)": "MANUAL"
     }
 

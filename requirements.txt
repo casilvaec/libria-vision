@@ -31,3 +31,8 @@ reportlab>=4.0.0
 # IMAGE PROCESSING - Para manipular imágenes en PDFs
 # ============================================================
 Pillow>=10.0.0
+
+# ============================================================
+# PHONE VALIDATION (Google libphonenumber)
+# ============================================================
+phonenumbers>=8.13.0
