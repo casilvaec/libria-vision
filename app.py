@@ -394,7 +394,7 @@ if not archivo:
 
 # Validar lectura del archivo con try-except
 try:
-    image_bytes = archivo.read()
+    image_bytes = archivo.getvalue
     mime = archivo.type or "image/jpeg"
     
     if not image_bytes or len(image_bytes) == 0:
