@@ -370,15 +370,46 @@ def validar_firma(codigo: str, firma_usuario: str) -> bool:
 # ============================================================
 st.write("### 📸 Paso 1: Sube la portada del libro")
 
+# Usar key único para evitar problemas de sesión
+if "uploader_key" not in st.session_state:
+    st.session_state.uploader_key = str(uuid.uuid4())
+
 # Solo file uploader (sin cámara)
 archivo = st.file_uploader(
     "Selecciona una imagen",
     type=["jpg", "jpeg", "png", "webp"],
     help="Sube una foto clara de la portada del libro"
+    key=st.session_state.uploader_key  # Key único por sesión
 )
 
 if not archivo:
     st.info("👆 Sube una imagen para comenzar")
+
+    # Botón para refrescar si hay problemas
+    if st.button("🔄 ¿Problemas para cargar? Click aquí"):
+        st.session_state.uploader_key = str(uuid.uuid4())
+        st.rerun()
+
+    st.stop()
+
+# Validar lectura del archivo con try-except
+try:
+    image_bytes = archivo.read()
+    mime = archivo.type or "image/jpeg"
+    
+    if not image_bytes or len(image_bytes) == 0:
+        st.error("❌ No se pudo leer la imagen. Intenta subirla nuevamente.")
+        if st.button("🔄 Reintentar"):
+            st.session_state.uploader_key = str(uuid.uuid4())
+            st.rerun()
+        st.stop()
+        
+except Exception as e:
+    logger.error(f"Error al leer archivo: {str(e)}")
+    st.error("❌ Error al procesar la imagen. Por favor recarga la página.")
+    if st.button("🔄 Recargar"):
+        st.session_state.uploader_key = str(uuid.uuid4())
+        st.rerun()
     st.stop()
 
 # Validar tamaño de imagen
