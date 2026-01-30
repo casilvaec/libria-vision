@@ -4,3 +4,7 @@ maxUploadSize = 5
 
 [browser]
 gatherUsageStats = false
+
+[server]
+enableXsrfProtection = false
+enableCORS = false
