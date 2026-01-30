@@ -8,6 +8,7 @@ import os
 import json
 import base64
 import logging
+import uuid
 import time
 import requests
 import streamlit as st
@@ -277,7 +278,13 @@ def llamar_n8n_webhook(
     logger.info(f"Llamando webhook n8n para: {titulo} - {autor}")
     
     try:
-        response = requests.post(webhook_url, json=payload, timeout=60)
+        response = requests.post(
+            webhook_url, 
+            json=payload, 
+            timeout=60,
+            headers={"Content-Type": "application/json",
+                     "x-request-id": str(uuid.uuid4())
+                    }}
         response.raise_for_status()
         data = response.json()
         
