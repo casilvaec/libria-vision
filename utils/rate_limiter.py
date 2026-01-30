@@ -84,26 +84,30 @@ def check_rate_limit(device_id: str) -> tuple[bool, int | str]:
     Verifica si el dispositivo puede hacer más búsquedas.
     
     Lógica:
-    1. Si tiene token de evaluador en URL → Sin límite
-    2. Si no → Verificar cuota en session_state
+    1. Si tiene token de evaluador en URL → límite evaluador (ej: 50)
+    2. Si no → límite normal (ej: 3)
     """
     # Verificar si tiene token de evaluador en la URL
     # Ejemplo: https://libria.app?token=EVAL2024
     query_params = st.query_params
     token = query_params.get("token", "")
     eval_token = os.getenv("EVAL_TOKEN", "")
+
+    # ✅ FIX: token puede venir como lista ["..."], lo normalizamos a string
+    if isinstance(token, list):
+        token = token[0]
     
+    # ✅ Elegir el límite según modo
     if token and token == eval_token:
-        # Modo evaluador: Sin límite
-        return (True, "∞")
+        max_limit = int(os.getenv("EVAL_LIMIT_MAX", "50"))   # evaluadores
+    else:
+        max_limit = int(os.getenv("RATE_LIMIT_MAX", "3"))    # público
     
-    # Usuario normal: Verificar cuota
+    # Usuario normal / evaluador: Verificar cuota en session_state
     # Inicializar contador si es primera vez
     if 'usage_count' not in st.session_state:
         st.session_state.usage_count = 0
     
-    # Obtener límite máximo desde variables de entorno
-    max_limit = int(os.getenv("RATE_LIMIT_MAX", "3"))
     
     # Calcular búsquedas restantes
     restantes = max_limit - st.session_state.usage_count
@@ -137,19 +141,36 @@ def mostrar_cuota(restantes: int | str):
     """
     Muestra banner visual con búsquedas restantes.
     
-    - Evaluadores: Banner azul informativo
-    - Usuarios normales: Banner amarillo con advertencia
+    - Evaluadores: Banner informativo con límite evaluador
+    - Usuarios normales: Banner según límite normal
     
-    Args:
-        restantes: Número de búsquedas restantes o "∞" para evaluadores
+    
     """
-    if restantes == "∞":
-        st.info("🎓 **Modo Evaluador**: puedes seguir realizando consultas de libros")
-    else:
-        # Mostrar con diferentes colores según cuántas quedan
-        if restantes == 0:
-            st.error("❌ **Has alcanzado tu límite de 3 búsquedas gratuitas**")
+    # Detectar si es evaluador (para mostrar el máximo correcto)
+    query_params = st.query_params
+    token = query_params.get("token", "")
+    eval_token = os.getenv("EVAL_TOKEN", "")
+
+    # ✅ FIX: token puede venir como lista ["..."], lo normalizamos a string
+    if isinstance(token, list):
+        token = token[0]
+
+    if token and token == eval_token:
+        max_limit = int(os.getenv("EVAL_LIMIT_MAX", "50"))
+    
+        if restantes <= 0:
+            st.error(f"❌ **Has alcanzado tu límite de {max_limit} búsquedas (Evaluador)**")
         elif restantes == 1:
-            st.warning(f"⚠️ **Última búsqueda disponible** ({restantes} de 3)")
+            st.warning(f"⚠️ **Última búsqueda disponible** ({restantes} de {max_limit})")
         else:
-            st.info(f"⚡ Te quedan **{restantes} de 3** búsquedas gratuitas")
+            st.info(f"🎓 **Modo Evaluador**: te quedan **{restantes} de {max_limit}** consultas")
+        return
+    
+    # Usuario normal
+    max_limit = int(os.getenv("RATE_LIMIT_MAX", "3"))
+    if restantes <= 0:
+        st.error(f"❌ **Has alcanzado tu límite de {max_limit} búsquedas gratuitas**")
+    elif restantes == 1:
+        st.warning(f"⚠️ **Última búsqueda disponible** ({restantes} de {max_limit})")
+    else:
+        st.info(f"⚡ Te quedan **{restantes} de {max_limit}** búsquedas gratuitas")

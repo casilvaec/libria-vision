@@ -890,4 +890,17 @@ if submitted:
 st.divider()
 mostrar_footer()
 
+st.markdown("""
+<div style="
+    background:#e8f4ff;
+    border-radius:10px;
+    padding:12px;
+    text-align:center;
+    font-size:14px;
+">
+ LibrIA utiliza IA y puede cometer errores. Verifica el contenido generado.
+</div>
+""", unsafe_allow_html=True)
+
+
 logger.info("Renderizado completo de la página")

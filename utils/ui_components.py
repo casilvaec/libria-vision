@@ -380,7 +380,7 @@ def mostrar_footer():
         {logo_html}
         <p class="libria-footer-title">LibrIA – Reseñas Inteligentes</p>
         <p class="libria-footer-line">Desarrollado por Carlos Silva</p>
-        <p class="libria-footer-line">Ingeniero en Informática</p>
+        <p class="libria-footer-line">Ing. en Informática</p>
         
       </div>
     </div>
