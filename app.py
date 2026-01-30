@@ -378,7 +378,7 @@ if "uploader_key" not in st.session_state:
 archivo = st.file_uploader(
     "Selecciona una imagen",
     type=["jpg", "jpeg", "png", "webp"],
-    help="Sube una foto clara de la portada del libro"
+    help="Sube una foto clara de la portada del libro",
     key=st.session_state.uploader_key  # Key único por sesión
 )
 
