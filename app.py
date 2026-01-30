@@ -262,7 +262,16 @@ def llamar_n8n_webhook(
     
     if not webhook_url:
         logger.error("N8N_WEBHOOK_URL no configurada")
+        st.error("⚙️ Error de configuración: Webhook URL no encontrada")
         raise ValueError("N8N_WEBHOOK_URL no configurada en .env")
+    
+    # NUEVO: Verificar que la URL sea válida
+    if not webhook_url.startswith("http"):
+        logger.error(f"URL inválida: {webhook_url}")
+        st.error(f"⚙️ Error de configuración: URL inválida")
+        raise ValueError("N8N_WEBHOOK_URL debe empezar con http:// o https://")
+
+    logger.info(f"Webhook URL configurada: {webhook_url[:50]}...")
     
     payload = {
         "titulo": titulo,
@@ -281,7 +290,7 @@ def llamar_n8n_webhook(
         response = requests.post(
         webhook_url,
         json=payload,
-        timeout=60,
+        timeout=180,
         headers={
             "Content-Type": "application/json",
             "x-request-id": str(uuid.uuid4())
@@ -748,13 +757,7 @@ if submitted:
     # ========================================
     # PREPARAR CÓDIGO TELEGRAM 
     # ========================================
-    ''' 
-    if enviar_telegram:
-        # Generar código único
-        import secrets
-        telegram_code = secrets.token_urlsafe(8)  # Código aleatorio seguro
-        logger.info(f"Código Telegram generado: {telegram_code}")
-    '''
+    
     # ========================================
     # PREPARAR CÓDIGO TELEGRAM (ya validado)
     # ========================================
@@ -892,19 +895,48 @@ if submitted:
         
         logger.info(f"Búsqueda exitosa para: {titulo} - {autor}")
         
-    except Exception as e:
-        logger.error(f"Error al procesar libro: {str(e)}", exc_info=True)
-        
+    except requests.exceptions.Timeout:
+            logger.error("Timeout al procesar libro")
+            progress_bar.empty()
+            status_text.empty()
+            st.error(
+                    "⏱️ La búsqueda está tardando más de lo normal.\n\n"
+                    "Esto puede pasar con libros poco conocidos.\n\n"
+                    "💡 **Intenta:**\n"
+                    "- Esperar unos minutos y volver a intentar\n"                
+                )
+    
+    except requests.exceptions.ConnectionError as e:
+        logger.error(f"Error de conexión: {str(e)}")
         progress_bar.empty()
         status_text.empty()
-        
         st.error(
-            "❌ Ocurrió un error al buscar las reseñas. "
-            "Por favor intenta nuevamente en unos momentos."
-        )
+                "🔌 No se pudo conectar con el servidor.\n\n"
+                "Verifica tu conexión a internet."
+            )
+    
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error en request: {str(e)}")
+        progress_bar.empty()
+        status_text.empty()
+        st.error(
+                f"❌ Error de comunicación: {str(e)}\n\n"
+                "Por favor intenta nuevamente."
+            )
+    
+    except Exception as e:
+        logger.error(f"Error inesperado: {str(e)}", exc_info=True)
+        progress_bar.empty()
+        status_text.empty()
+        st.error(
+                "❌ Ocurrió un error inesperado.\n\n"
+                "Por favor intenta nuevamente en unos momentos."
+            )
         
-        if SHOW_DEBUG_ERRORS:
+    if SHOW_DEBUG_ERRORS:
             st.exception(e)
+            st.write("**Detalles del error:**")
+            st.code(str(e))
 
 
 # ============================================================
