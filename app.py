@@ -17,6 +17,9 @@ from openai import OpenAI
 import phonenumbers
 from phonenumbers.phonenumberutil import NumberParseException
 
+# --- AGREGA ESTO AL PRINCIPIO ---
+if 'uploader_key' not in st.session_state:
+    st.session_state.uploader_key = "1"
 # ============================================================
 # IMPORTS - RATE LIMITING Y UI
 # ============================================================
