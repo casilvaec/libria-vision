@@ -58,6 +58,20 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 logger.info("Variables de entorno cargadas desde .env")
 
+# ============================================================
+# STREAMLIT CLOUD - CARGAR SECRETS COMO ENV VARS (mínimo cambio)
+# ============================================================
+try:
+    # Si estás en Streamlit Cloud, st.secrets existe y contiene tus llaves
+    for k, v in st.secrets.items():
+        # Evita sobreescribir si ya existe (por ejemplo, local con .env)
+        os.environ.setdefault(k, str(v))
+    logger.info("Secrets de Streamlit cargados en variables de entorno")
+except Exception:
+    # En local o si no hay secrets configurados, no pasa nada
+    pass
+
+
 
 # ============================================================
 # CONFIG GENERAL
