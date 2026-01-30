@@ -17,6 +17,13 @@ from openai import OpenAI
 import phonenumbers
 from phonenumbers.phonenumberutil import NumberParseException
 
+st.set_page_config(
+    page_title="LibrIA – ¿De qué trata el libro?",
+    page_icon="assets/logo-libria-transparente.png",
+    layout="centered",
+    initial_sidebar_state="collapsed"
+)
+
 # --- AGREGA ESTO AL PRINCIPIO ---
 if 'uploader_key' not in st.session_state:
     st.session_state.uploader_key = "1"
@@ -134,12 +141,7 @@ def get_openai_client() -> OpenAI:
 # ============================================================
 # CONFIGURACIÓN DE PÁGINA
 # ============================================================
-st.set_page_config(
-    page_title="LibrIA – ¿De qué trata el libro?",
-    page_icon="assets/logo-libria-transparente.png",
-    layout="centered",
-    initial_sidebar_state="collapsed"
-)
+
 
 # Inyectar CSS Mobile-First con branding
 inject_mobile_css()
