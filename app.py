@@ -399,7 +399,7 @@ if not archivo:
 
 # Validar lectura del archivo con try-except
 try:
-    image_bytes = archivo.getvalue
+    image_bytes = archivo.getvalue()
     mime = archivo.type or "image/jpeg"
     
     if not image_bytes or len(image_bytes) == 0:
@@ -417,9 +417,7 @@ except Exception as e:
         st.rerun()
     st.stop()
 
-# Validar tamaño de imagen
-image_bytes = archivo.read()
-mime = archivo.type or "image/jpeg"
+
 
 if len(image_bytes) > MAX_IMAGE_BYTES:
     size_mb = len(image_bytes) / 1024 / 1024
