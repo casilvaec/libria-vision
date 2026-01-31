@@ -282,7 +282,7 @@ def llamar_n8n_webhook(
         "titulo": titulo,
         "autor": autor,
         "requestId": f"req-{int(time.time())}",
-        "device_id": device_id,
+        "device_id": str(device_id),
         "email": email,
             # E.164, solo si eligió Telegram
         "telegram_code": telegram_code,    # código start del bot
