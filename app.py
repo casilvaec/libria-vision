@@ -677,6 +677,7 @@ if enviar_telegram:
         if not firma:
             st.session_state.telegram_firma_valida = False
             st.session_state.telegram_error = ""
+            
             return
         
         if validar_firma(codigo_challenge, firma):
@@ -797,9 +798,25 @@ if submitted:
     # ========================================
     telegram_code_final = None
     if enviar_telegram and st.session_state.telegram_firma_valida:
-        telegram_code_final = st.session_state.telegram_challenge
-        logger.info(f"Código Telegram validado: {telegram_code_final}")
+        #telegram_code_final = st.session_state.get("input_firma_telegram", "").strip()
+        #logger.info(f"Código Telegram validado: {telegram_code_final}")
+        codigo = st.session_state.telegram_challenge
+        worker_url = os.getenv("TELEGRAM_WORKER_URL", "https://libria-telegram-bot.carlossilvatecnologia.workers.dev/")
 
+        try:
+            resp = requests.get(
+                f"{worker_url}/get-chat-id",
+                params={"codigo": codigo},
+                timeout=10
+            )
+            resp.raise_for_status()
+            chat_data = resp.json()
+            telegram_code_final = str(chat_data["chat_id"])
+            logger.info(f"Chat ID obtenido de Telegram: {telegram_code_final}")
+        except Exception as e:
+            logger.error(f"Error al obtener chat_id: {e}")
+            st.error("❌ No se pudo verificar tu cuenta de Telegram. Intenta de nuevo.")
+            st.stop()
 
     # ========================================
     # PASO 2: LLAMAR N8N PARA BUSCAR RESEÑAS
