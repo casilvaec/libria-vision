@@ -16,12 +16,33 @@ from dotenv import load_dotenv
 from openai import OpenAI
 import phonenumbers
 from phonenumbers.phonenumberutil import NumberParseException
+from pathlib import Path
+
+
+# 1. CONFIGURACIÓN DE PÁGINA (SIEMPRE PRIMERO)
+
 
 st.set_page_config(
     page_title="LibrIA – ¿De qué trata el libro?",
     page_icon="assets/logo-libria-transparente.png",
     layout="centered",
     initial_sidebar_state="collapsed"
+)
+
+# ============================================================
+# VACUNA CONTRA EL TRADUCTOR DE GOOGLE
+# ============================================================
+# Esto evita que Chrome intente traducir la página y rompa Streamlit (Error removeChild)
+st.markdown(
+    """
+    <meta name="google" content="notranslate">
+    <style>
+        /* Ocultar la barra de traducción de Chrome si aparece */
+        .goog-te-banner-frame {display: none !important;}
+        body {top: 0px !important;}
+    </style>
+    """,
+    unsafe_allow_html=True
 )
 
 # --- AGREGA ESTO AL PRINCIPIO ---
@@ -70,17 +91,24 @@ load_dotenv()
 logger.info("Variables de entorno cargadas desde .env")
 
 # ============================================================
-# STREAMLIT CLOUD - CARGAR SECRETS COMO ENV VARS (mínimo cambio)
+# STREAMLIT CLOUD - CARGAR SECRETS COMO ENV VARS (sin banner en local)
 # ============================================================
 try:
-    # Si estás en Streamlit Cloud, st.secrets existe y contiene tus llaves
-    for k, v in st.secrets.items():
-        # Evita sobreescribir si ya existe (por ejemplo, local con .env)
-        os.environ.setdefault(k, str(v))
-    logger.info("Secrets de Streamlit cargados en variables de entorno")
+    secrets_file_1 = Path.home() / ".streamlit" / "secrets.toml"
+    secrets_file_2 = Path(__file__).resolve().parent / ".streamlit" / "secrets.toml"
+
+    # ✅ Solo leemos st.secrets si existe un secrets.toml (evita el aviso en local)
+    if secrets_file_1.exists() or secrets_file_2.exists():
+        for k, v in st.secrets.items():
+            os.environ.setdefault(k, str(v))
+        logger.info("Secrets de Streamlit cargados en variables de entorno")
+    else:
+        logger.info("Sin secrets.toml local. Usando .env/variables del sistema.")
+
 except Exception:
-    # En local o si no hay secrets configurados, no pasa nada
+    # No mostramos nada en UI; en local no debe romper
     pass
+
 
 
 
@@ -395,9 +423,9 @@ if not archivo:
     st.info("👆 Sube una imagen para comenzar")
 
     # Botón para refrescar si hay problemas
-    if st.button("🔄 ¿Problemas para cargar? Click aquí"):
-        st.session_state.uploader_key = str(uuid.uuid4())
-        st.rerun()
+    #if st.button("🔄 ¿Problemas para cargar? Click aquí"):
+    #    st.session_state.uploader_key = str(uuid.uuid4())
+    #    st.rerun()
 
     st.stop()
 
@@ -442,11 +470,11 @@ st.image(image_bytes, caption="Portada cargada", use_container_width=True)
 # ============================================================
 st.write("### 📬 Paso 2: ¿Cómo quieres recibir tu reseña?")
 
-st.write("Selecciona al menos una opción adicional:")
+st.write("Selecciona al menos una opción:")
 
 # Visualizar en pantalla - SIEMPRE ACTIVO
-st.checkbox("👀 Visualizar en pantalla", value=True, disabled=True, 
-            help="Siempre se mostrará en pantalla", key="mostrar_web")
+#st.checkbox("👀 Visualizar en pantalla", value=True, disabled=True, 
+#            help="Siempre se mostrará en pantalla", key="mostrar_web")
 
 # --- Exclusividad: si marca Email, desmarca Telegram; y viceversa ---
 def _toggle_email():
