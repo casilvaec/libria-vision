@@ -468,6 +468,9 @@ st.image(image_bytes, caption="Portada cargada", use_container_width=True)
 # ============================================================
 # UI PRINCIPAL - PASO 2: OPCIONES DE ENTREGA (REACTIVAS)
 # ============================================================
+
+st.caption("💡 Si tu navegador traduce páginas automáticamente, desactívalo para una mejor experiencia.")
+
 st.write("### 📬 Paso 2: ¿Cómo quieres recibir tu reseña?")
 
 st.write("Selecciona al menos una opción:")
