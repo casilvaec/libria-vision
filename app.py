@@ -298,9 +298,13 @@ def llamar_n8n_webhook(
         timeout=180,
         headers={
             "Content-Type": "application/json",
-            "x-request-id": str(uuid.uuid4())
+            #"x-request-id": str(uuid.uuid4())
             }
         )
+
+        # AGREGAR ESTA LÍNEA TEMPORAL:
+        logger.info(f"Respuesta n8n - Status: {response.status_code}, Body: {response.text[:500]}")
+
         response.raise_for_status()
         data = response.json()
         
@@ -865,7 +869,7 @@ if submitted:
         # Extraer datos de la respuesta
         ficha_data = resultado_n8n.get("body", resultado_n8n)
         
-        st.success("🎉 ¡Tu reseña está lista!")
+        st.success("🎉 ¡Tu reseña está lista! 📬 Revisa tu bandeja de entrada (y spam por si acaso)")
         
         # Mostrar en tabs
         tab1, tab2, tab3 = st.tabs(["📚 Resumen", "📊 Detalles", "🔧 JSON"])
@@ -911,22 +915,22 @@ if submitted:
         # ========================================
         # ENVIAR PDF POR EMAIL
         # ========================================
-        if enviar_email:
-            try:
-                with st.spinner("📄 Generando PDF..."):
-                    pdf_bytes = generar_pdf(ficha_data, titulo, autor)
-                
-                with st.spinner(f"📧 Enviando a {email}..."):
-                    enviar_pdf_email(email, pdf_bytes, titulo)
-                
-                st.success(f"✅ PDF enviado exitosamente a **{email}**")
-                st.info("📬 Revisa tu bandeja de entrada (y spam por si acaso)")
-                
-            except Exception as e:
-                logger.error(f"Error al generar/enviar PDF: {str(e)}", exc_info=True)
-                st.error(f"❌ No se pudo enviar el PDF. Error: {str(e)}")
-                if SHOW_DEBUG_ERRORS:
-                    st.exception(e)
+        #if enviar_email:
+        #    try:
+        #        with st.spinner("📄 Generando PDF..."):
+        #            pdf_bytes = generar_pdf(ficha_data, titulo, autor)
+        #        
+        #        with st.spinner(f"📧 Enviando a {email}..."):
+        #            enviar_pdf_email(email, pdf_bytes, titulo)
+        #       
+        #       st.success(f"✅ PDF enviado exitosamente a **{email}**")
+        #        st.info("📬 Revisa tu bandeja de entrada (y spam por si acaso)")
+        #       
+        #    except Exception as e:
+        #        logger.error(f"Error al generar/enviar PDF: {str(e)}", exc_info=True)
+        #        st.error(f"❌ No se pudo enviar el PDF. Error: {str(e)}")
+        #        if SHOW_DEBUG_ERRORS:
+        #           st.exception(e)
         
         # ========================================
         # CONFIRMACIÓN TELEGRAM
